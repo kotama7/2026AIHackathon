@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
     "@village/shared": "workspace:*",
     "firebase": "^11.1.0",
     "next": "^15.1.4",

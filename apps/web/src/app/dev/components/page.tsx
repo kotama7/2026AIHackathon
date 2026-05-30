@@ -12,6 +12,7 @@ import {
   CharacterAvatar,
   EvidenceCard,
   LogBubble,
+  Modal,
 } from '@/components/ui';
 
 const SAMPLE_CHARS = [
@@ -23,6 +24,8 @@ const SAMPLE_CHARS = [
 
 export default function ComponentsDevPage() {
   const [pinned, setPinned] = useState<Set<string>>(new Set());
+  const [dismissibleOpen, setDismissibleOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const togglePin = (id: string) =>
     setPinned((prev) => {
       const next = new Set(prev);
@@ -35,9 +38,7 @@ export default function ComponentsDevPage() {
     <main className="mx-auto max-w-board space-y-section p-page">
       <header>
         <h1 className="text-4xl text-brand-gold">UI Components</h1>
-        <p className="mt-2 text-sm text-brand-muted">
-          B1-07 雛形コンポーネントの開発確認。Modal (Radix) は別タスクで追加予定。
-        </p>
+        <p className="mt-2 text-sm text-brand-muted">B1-07 雛形コンポーネントの開発確認。</p>
       </header>
 
       <section className="space-y-card">
@@ -158,6 +159,62 @@ export default function ComponentsDevPage() {
             timestamp="day 2 / turn 5"
           />
         </div>
+      </section>
+
+      <section className="space-y-card">
+        <h2 className="text-2xl text-brand-emphasis">Modal</h2>
+        <div className="flex flex-wrap gap-card">
+          <Button onClick={() => setDismissibleOpen(true)}>通常モーダルを開く</Button>
+          <Button variant="danger" onClick={() => setConfirmOpen(true)}>
+            確認モーダル (dismissible=false)
+          </Button>
+        </div>
+        <p className="text-xs text-brand-muted">
+          ESC / overlay クリック / × ボタンで閉じる。確認モーダルは ESC / overlay
+          無効、明示ボタンのみで閉じる。
+        </p>
+
+        <Modal
+          open={dismissibleOpen}
+          onOpenChange={setDismissibleOpen}
+          title="証拠の詳細"
+          description="深夜の扉ログについて確認します。"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setDismissibleOpen(false)}>
+                閉じる
+              </Button>
+              <Button onClick={() => setDismissibleOpen(false)}>了解</Button>
+            </>
+          }
+        >
+          <p className="text-sm text-brand-text">
+            23:52 にリエの部屋の扉が開いた記録。Radix のフォーカストラップと ESC 閉じが
+            効いているか確認するためのデモです。
+          </p>
+        </Modal>
+
+        <Modal
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          dismissible={false}
+          title="処刑を確定しますか？"
+          description="この判決は取り消せません。"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setConfirmOpen(false)}>
+                取り消し
+              </Button>
+              <Button variant="danger" onClick={() => setConfirmOpen(false)}>
+                処刑する
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm text-brand-text">
+            リエを人狼として処刑します。判決が間違っていた場合、村の信頼度が大きく下がります。
+          </p>
+        </Modal>
       </section>
     </main>
   );
