@@ -35,6 +35,14 @@ export class GeminiConfigError extends GeminiError {
   }
 }
 
+/** アプリ側の 1 日あたりリクエスト上限に到達 (多層防御。無料枠超過前に自前で停止) */
+export class GeminiQuotaError extends GeminiError {
+  constructor(public readonly dailyLimit: number) {
+    super(`LLM daily request limit reached (${dailyLimit}). Try again tomorrow.`);
+    this.name = 'GeminiQuotaError';
+  }
+}
+
 /** zod スキーマ検証で最大リトライまで失敗 (A1-02) */
 export class LLMSchemaError extends GeminiError {
   constructor(

@@ -3,6 +3,7 @@ import { logger } from 'firebase-functions/v2';
 
 import { GeminiConfigError, GeminiRetryExhaustedError, GeminiTimeoutError } from './errors.js';
 import { GEMINI_API_KEY } from './secrets.js';
+import { enforceDailyLlmQuota } from './usageGuard.js';
 
 // =============================================================================
 // Defaults
@@ -18,8 +19,8 @@ export const TEMPERATURE = {
   SPEAKER: 0.7,
 } as const;
 
-/** 既定モデル。Gemini 2.0 Flash は無料枠があり軽量で MVP に十分 (1.5-flash は廃止済み) */
-const DEFAULT_MODEL = 'gemini-2.0-flash';
+/** 既定モデル。gemini-2.5-flash は無料枠があり MVP に十分 (1.5-flash は廃止、2.0-flash は無料枠0) */
+const DEFAULT_MODEL = 'gemini-2.5-flash';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RETRIES = 3;
@@ -64,7 +65,7 @@ export function resetGeminiClient(): void {
 export type CallGeminiOptions = {
   /** LLM に送るプロンプト本文 */
   prompt: string;
-  /** モデル名。未指定なら gemini-2.0-flash */
+  /** モデル名。未指定なら gemini-2.5-flash */
   model?: string;
   /** 0.0 - 1.0。未指定なら 0.7 */
   temperature?: number;
@@ -109,6 +110,9 @@ export async function callGemini(opts: CallGeminiOptions): Promise<CallGeminiRes
     maxRetries = DEFAULT_MAX_RETRIES,
     traceLabel = 'gemini',
   } = opts;
+
+  // 多層防御: 1 日あたりリクエスト上限 (LLM_DAILY_REQUEST_LIMIT 未設定なら no-op)
+  await enforceDailyLlmQuota();
 
   const client = getClient();
   const model: GenerativeModel = client.getGenerativeModel({
