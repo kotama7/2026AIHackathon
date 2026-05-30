@@ -17,8 +17,21 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ['var(--font-sans)', 'sans-serif'],
+        sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
         serif: ['var(--font-serif)', 'serif'],
+      },
+      spacing: {
+        gutter: '1.5rem',
+        card: '1.25rem',
+        section: '2.5rem',
+        page: '3rem',
+      },
+      maxWidth: {
+        prose: '70ch',
+        board: '72rem',
+      },
+      borderRadius: {
+        card: '0.75rem',
       },
     },
   },

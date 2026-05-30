@@ -11,15 +11,13 @@
   --accent-danger: #a33b3b;
   --accent-success: #6b8e4e;
   --border-subtle: #2a2d38;
-  --font-sans: 'Noto Sans JP', system-ui, sans-serif;
-  --font-serif: 'Noto Serif JP', serif;
 }
 
 html,
 body {
   background-color: var(--bg-base);
   color: var(--text-primary);
-  font-family: var(--font-sans);
+  font-family: var(--font-sans), system-ui, sans-serif;
 }
 
 ::selection {
