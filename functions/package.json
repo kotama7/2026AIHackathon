@@ -8,11 +8,12 @@
     "node": "20"
   },
   "scripts": {
-    "build": "tsc",
-    "build:watch": "tsc --watch",
+    "build": "tsc --noEmit && node esbuild.config.mjs",
+    "build:watch": "tsc --watch --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
-    "test:rules": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --testPathPattern=test/rules --testPathIgnorePatterns=/node_modules/",
+    "test:rules": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --testPathPatterns=test/rules --testPathIgnorePatterns=/node_modules/",
+    "test:e2e:truth-compiler": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --testPathPatterns=test/e2e --testPathIgnorePatterns=/node_modules/",
     "test:ci": "cross-env NODE_OPTIONS=--experimental-vm-modules firebase emulators:exec --only firestore,auth \"jest\"",
     "emulators": "firebase emulators:start --only functions,firestore,auth",
     "serve": "pnpm build && firebase emulators:start --only functions",
@@ -33,6 +34,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.0",
     "cross-env": "^10.1.0",
+    "esbuild": "^0.28.0",
     "firebase": "^11.10.0",
     "firebase-functions-test": "^3.5.0",
     "jest": "^30.4.2",

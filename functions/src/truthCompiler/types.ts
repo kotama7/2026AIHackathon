@@ -96,6 +96,7 @@ import type {
   DeductionPath,
   Evidence,
   LocationGraph,
+  PlannedLie,
   Testimony,
   TimelineEvent,
 } from '@village/shared';
@@ -117,7 +118,7 @@ export type CaseDraft = {
   timeline: TimelineEvent[];
   evidence: Evidence[];
   testimonies: Testimony[];
-  plannedLies: import('@village/shared').PlannedLie[];
+  plannedLies: PlannedLie[];
   redHerrings: Array<{ characterId: CharacterId; reason: string }>;
   locationGraph: LocationGraph;
   deductionPath?: DeductionPath;
