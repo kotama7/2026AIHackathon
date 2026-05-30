@@ -1,0 +1,32 @@
+name: Sync Tasks to Issues
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tasks/**'
+      - 'scripts/sync-tasks.mjs'
+      - '.github/workflows/sync-tasks.yml'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Sync tasks
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_USER_A: ${{ vars.GITHUB_USER_A }}
+          GITHUB_USER_B: ${{ vars.GITHUB_USER_B }}
+        run: node scripts/sync-tasks.mjs

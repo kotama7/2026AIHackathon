@@ -1,0 +1,48 @@
+# 参考用ラベル定義。実際は scripts/sync-tasks.mjs が自動で create/edit する。
+# 手動同期したい場合は `gh label sync` 等のサードパーティアクションを使ってもよい。
+- name: phase-0
+  color: B60205
+  description: Phase 0 — Setup & contracts
+- name: phase-1
+  color: D93F0B
+  description: Phase 1 — Foundations
+- name: phase-2
+  color: FBCA04
+  description: Phase 2 — Truth Compiler & early screens
+- name: phase-3
+  color: 0E8A16
+  description: Phase 3 — Game loop
+- name: phase-4
+  color: 1D76DB
+  description: Phase 4 — Trial / Result / Reveal
+- name: phase-5
+  color: 5319E7
+  description: Phase 5 — Polish & integration
+- name: assignee:A
+  color: 0E8A16
+  description: Person A (backend/LLM)
+- name: assignee:B
+  color: 1D76DB
+  description: Person B (frontend)
+- name: assignee:both
+  color: 5319E7
+  description: Joint task
+# area labels (informational, auto-created from tasks)
+- name: infra
+  color: C5DEF5
+- name: functions
+  color: C5DEF5
+- name: llm
+  color: C5DEF5
+- name: firestore
+  color: C5DEF5
+- name: nextjs
+  color: C5DEF5
+- name: ui
+  color: C5DEF5
+- name: types
+  color: C5DEF5
+- name: ci
+  color: C5DEF5
+- name: docs
+  color: C5DEF5
