@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { type ReactNode, useMemo } from 'react';
 
+import { ModeBadge } from '@/components/game/ModeBadge';
+import { PhaseTransition } from '@/components/game/PhaseTransition';
 import { cn } from '@/components/ui/cn';
 import { useSyncFirestoreToStore } from '@/hooks/useSyncFirestoreToStore';
 import { useGamePhaseInfo, useRemainingPoints } from '@/stores/gameStore';
@@ -45,15 +47,21 @@ export function GameNav({ gameId, children }: { gameId: string; children: ReactN
   const remainingPoints = useRemainingPoints();
   const pathname = usePathname();
 
+  const gameEnded = status !== null && status !== 'in_progress';
+
   const sections = useMemo(
     () =>
       SECTIONS.map((s) => {
         const href = s.slug ? `/play/${gameId}/${s.slug}` : `/play/${gameId}`;
-        const enabled = s.enabledIn.length === 0 || (phase && s.enabledIn.includes(phase));
+        // result は phase=='result' でなくとも status が終局していれば閲覧可
+        const enabled =
+          s.slug === 'result'
+            ? gameEnded || phase === 'result'
+            : s.enabledIn.length === 0 || (phase !== null && s.enabledIn.includes(phase));
         const active = pathname === href || (s.slug === '' && pathname === `/play/${gameId}`);
         return { ...s, href, enabled: Boolean(enabled), active };
       }),
-    [gameId, phase, pathname]
+    [gameId, phase, pathname, gameEnded]
   );
 
   return (
@@ -67,6 +75,7 @@ export function GameNav({ gameId, children }: { gameId: string; children: ReactN
             >
               AI村裁判
             </Link>
+            <ModeBadge />
             {day && phase && (
               <span className="rounded-card border border-brand-border bg-brand-bg px-3 py-1 text-xs text-brand-muted">
                 Day {day} / {PHASE_LABELS[phase]}
@@ -94,6 +103,7 @@ export function GameNav({ gameId, children }: { gameId: string; children: ReactN
         </nav>
       </header>
       <main className="mx-auto w-full max-w-board flex-1 p-page">{children}</main>
+      <PhaseTransition />
     </div>
   );
 }
