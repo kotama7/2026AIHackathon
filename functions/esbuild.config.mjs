@@ -1,10 +1,12 @@
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
 
 // @village/shared は npm が解決できない workspace:* 依存なので package.json から外し、
 // esbuild の alias で src を直接参照して inline 化する (tsc は paths、jest は moduleNameMapper で解決)。
-const sharedEntry = fileURLToPath(new URL('../packages/shared/src/index.ts', import.meta.url));
+const here = dirname(fileURLToPath(import.meta.url));
+const sharedEntry = resolve(here, '../packages/shared/src/index.ts');
 
 /**
  * Functions のデプロイ用バンドル。

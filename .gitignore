@@ -244,6 +244,9 @@ out/
 .firebase/
 .secret.local
 **/.secret.local
+# サービスアカウント秘密鍵 (絶対にコミットしない)
+*-firebase-adminsdk-*.json
+serviceAccount*.json
 firebase-debug.log*
 firestore-debug.log*
 ui-debug.log*
