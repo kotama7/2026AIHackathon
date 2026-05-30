@@ -59,6 +59,22 @@ export default [
     },
   },
 
+  // .cjs (jest config 等) は CommonJS module/require を許可
+  {
+    files: ['**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        module: 'readonly',
+        require: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        process: 'readonly',
+        console: 'readonly',
+      },
+    },
+  },
+
   // Prettier との衝突回避 (最後に置く)
   eslintConfigPrettier,
 ];
