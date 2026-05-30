@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { ModeBadge } from '@/components/game/ModeBadge';
 import { StartGameLoader } from '@/components/game/StartGameLoader';
 import { Button } from '@/components/ui';
 import { callStartNewGame } from '@/lib/firebase/functions';
@@ -67,7 +68,10 @@ export default function HomePage() {
   }, [searchParams, startGame, router]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-page">
+    <main className="relative flex min-h-screen items-center justify-center p-page">
+      <div className="absolute right-page top-page">
+        <ModeBadge />
+      </div>
       <div className="flex max-w-prose animate-fade-in flex-col items-center gap-section text-center">
         <div className="space-y-3">
           <h1 className="font-serif text-6xl font-bold tracking-display text-brand-gold">
