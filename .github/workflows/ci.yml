@@ -121,4 +121,9 @@ jobs:
           distribution: temurin
           java-version: '21'
       - run: pnpm install --frozen-lockfile
+      # firebase.json の hosting (apps/web の Next.js webframeworks) を firebase-tools@15 が
+      # parse するには webframeworks experiment が必要。--only firestore,auth でも config 検証で
+      # 落ちるため env で有効化する (hosting emulator 自体は起動しない)。
       - run: pnpm dlx firebase-tools@15 emulators:exec --only firestore,auth "pnpm --filter @village/functions test:rules"
+        env:
+          FIREBASE_CLI_EXPERIMENTS: webframeworks
