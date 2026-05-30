@@ -162,14 +162,24 @@ describe('startNewGame (truth compiler)', () => {
     expect(setMeta).not.toHaveBeenCalled();
   });
 
-  it('useSeed=true なら Truth Compiler を呼ばずシードゲームを起動', async () => {
+  it('useSeed=true なら Truth Compiler を呼ばず検証済みシード CaseTruth で起動', async () => {
     const wrapped = testEnv.wrap(startNewGame);
     const result = (await wrapped({
       auth: { uid: 'test-user-uid', token: {} },
       data: { useSeed: true },
     })) as Awaited<ReturnType<typeof startNewGame>>;
+    // Truth Compiler は呼ばない
     expect(compileCaseTruth).not.toHaveBeenCalled();
     expect(result.characters).toHaveLength(6);
-    expect(setCaseTruth).not.toHaveBeenCalled(); // seed は internal を書かない
+    expect(result.meta.isSeedGame).toBe(true);
+    // P5-07: シードでも internal/ に真相一式を保存し、尋問・裁判が動くようにする
+    expect(setCaseTruth).toHaveBeenCalledTimes(1);
+    expect(setManySecrets).toHaveBeenCalledTimes(1);
+    expect(setManyTimeline).toHaveBeenCalledTimes(1);
+    // 公開キャラに内部情報が漏れない
+    for (const c of result.characters) {
+      expect(c).not.toHaveProperty('secret');
+      expect(c).not.toHaveProperty('isWerewolf');
+    }
   });
 });

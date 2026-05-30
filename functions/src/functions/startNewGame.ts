@@ -1,4 +1,5 @@
 import type {
+  CaseTruth,
   CharacterPublic,
   DialogueLog,
   EvidencePublic,
@@ -14,12 +15,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { internalDb, nowTimestamp, userDb } from '../db/admin.js';
 import { GEMINI_API_KEY } from '../llm/secrets.js';
-import {
-  buildDummyCharacters,
-  buildDummyEvidence,
-  buildDummyLogs,
-  buildInitialMeta,
-} from '../seed/dummyGame.js';
+import { loadSeedCase } from '../seed/loadSeedCase.js';
 import { compileCaseTruth, TruthCompilerError } from '../truthCompiler/index.js';
 
 /**
@@ -77,59 +73,69 @@ export const startNewGame = onCall<StartNewGameRequest, Promise<StartNewGameResp
       });
     }
 
-    const publicChars = caseTruth.characters.map(toCharacterPublic);
-    const day1Evidence = caseTruth.evidence
-      .filter((e) => e.day === 1)
-      .map(toEvidencePublic)
-      .slice(0, 3);
-    const initialLogs = buildPlaceholderLogs(gameId, publicChars);
-    const meta = buildRealMeta(uid, gameId, publicChars);
-
-    await Promise.all([
-      // --- internal/ (Functions 専用) ---
-      internalDb.caseTruth.set(gameId, caseTruth),
-      internalDb.characterSecrets.setMany(gameId, caseTruth.characters),
-      internalDb.timeline.setMany(gameId, caseTruth.timeline),
-      // --- users/{uid}/games/{gameId}/ (クライアント可視) ---
-      userDb.meta.set(uid, gameId, meta),
-      ...publicChars.map((c) => userDb.characters.set(uid, gameId, c.id, c)),
-      userDb.evidence.addMany(uid, gameId, day1Evidence),
-      ...initialLogs.map((l) => userDb.publicLogs.add(uid, gameId, l)),
-    ]);
-
-    return {
-      gameId,
-      meta,
-      characters: publicChars,
-      initialEvidence: day1Evidence,
-      initialLogs,
-    };
+    return persistAndRespond(uid, gameId, caseTruth, false);
   }
 );
 
 // =============================================================================
-// シードゲーム (useSeed=true)
+// シードゲーム (useSeed=true) — P5-07
 // =============================================================================
 
+/**
+ * 検証済みシード CaseTruth を 1 件読み込み、実ゲームと同じ経路で保存する。
+ * internal/ に真相一式を書くため、シードゲームでも尋問・裁判が通常どおり動く。
+ */
 async function startSeedGame(
   uid: UserId,
   gameId: GameId,
   payload: StartNewGameRequest
 ): Promise<StartNewGameResponse> {
   logger.info('startNewGame (seed) called', { uid, gameId, payload });
-  const characters = buildDummyCharacters();
-  const evidence = buildDummyEvidence(gameId);
-  const logs = buildDummyLogs(gameId);
-  const meta = buildInitialMeta(uid, gameId);
+  const caseTruth = loadSeedCase(gameId);
+  return persistAndRespond(uid, gameId, caseTruth, true);
+}
+
+// =============================================================================
+// 永続化 + レスポンス生成 (実ゲーム / シード共通)
+// =============================================================================
+
+/**
+ * CaseTruth を internal/ (真相) と users/ (公開) に分割保存し、StartNewGameResponse を返す。
+ * isSeedGame で meta のフラグだけ切り替える。
+ */
+async function persistAndRespond(
+  uid: UserId,
+  gameId: GameId,
+  caseTruth: CaseTruth,
+  isSeedGame: boolean
+): Promise<StartNewGameResponse> {
+  const publicChars = caseTruth.characters.map(toCharacterPublic);
+  const day1Evidence = caseTruth.evidence
+    .filter((e) => e.day === 1)
+    .map(toEvidencePublic)
+    .slice(0, 3);
+  const initialLogs = buildPlaceholderLogs(gameId, publicChars);
+  const meta = buildRealMeta(uid, gameId, publicChars, isSeedGame);
 
   await Promise.all([
+    // --- internal/ (Functions 専用) ---
+    internalDb.caseTruth.set(gameId, caseTruth),
+    internalDb.characterSecrets.setMany(gameId, caseTruth.characters),
+    internalDb.timeline.setMany(gameId, caseTruth.timeline),
+    // --- users/{uid}/games/{gameId}/ (クライアント可視) ---
     userDb.meta.set(uid, gameId, meta),
-    ...characters.map((c) => userDb.characters.set(uid, gameId, c.id, c)),
-    userDb.evidence.addMany(uid, gameId, evidence),
-    ...logs.map((l) => userDb.publicLogs.add(uid, gameId, l)),
+    ...publicChars.map((c) => userDb.characters.set(uid, gameId, c.id, c)),
+    userDb.evidence.addMany(uid, gameId, day1Evidence),
+    ...initialLogs.map((l) => userDb.publicLogs.add(uid, gameId, l)),
   ]);
 
-  return { gameId, meta, characters, initialEvidence: evidence, initialLogs: logs };
+  return {
+    gameId,
+    meta,
+    characters: publicChars,
+    initialEvidence: day1Evidence,
+    initialLogs,
+  };
 }
 
 // =============================================================================
@@ -162,7 +168,12 @@ function toEvidencePublic(e: EvidencePublic): EvidencePublic {
   };
 }
 
-function buildRealMeta(uid: UserId, gameId: GameId, chars: CharacterPublic[]): GameMeta {
+function buildRealMeta(
+  uid: UserId,
+  gameId: GameId,
+  chars: CharacterPublic[],
+  isSeedGame: boolean
+): GameMeta {
   const now = nowTimestamp();
   return {
     gameId,
@@ -173,7 +184,7 @@ function buildRealMeta(uid: UserId, gameId: GameId, chars: CharacterPublic[]): G
     aliveCharacters: chars.map((c) => c.id),
     villageTrust: 50,
     status: 'in_progress',
-    isSeedGame: false,
+    isSeedGame,
     createdAt: now,
     updatedAt: now,
   };
