@@ -23,7 +23,8 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # pnpm 11.5+ は Node 22.13+ 必須。Functions の deploy runtime (Node 20) とは別軸
+          node-version: '22'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
@@ -36,7 +37,8 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # pnpm 11.5+ は Node 22.13+ 必須。Functions の deploy runtime (Node 20) とは別軸
+          node-version: '22'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
@@ -50,7 +52,8 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # pnpm 11.5+ は Node 22.13+ 必須。Functions の deploy runtime (Node 20) とは別軸
+          node-version: '22'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
@@ -64,7 +67,8 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # pnpm 11.5+ は Node 22.13+ 必須。Functions の deploy runtime (Node 20) とは別軸
+          node-version: '22'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
@@ -78,7 +82,8 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # pnpm 11.5+ は Node 22.13+ 必須。Functions の deploy runtime (Node 20) とは別軸
+          node-version: '22'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
@@ -92,7 +97,8 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # pnpm 11.5+ は Node 22.13+ 必須。Functions の deploy runtime (Node 20) とは別軸
+          node-version: '22'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @village/functions test
@@ -106,7 +112,8 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # pnpm 11.5+ は Node 22.13+ 必須。Functions の deploy runtime (Node 20) とは別軸
+          node-version: '22'
           cache: pnpm
       # firebase-tools 15+ は Java 21+ 必須 (Firestore emulator のため)
       - uses: actions/setup-java@v4
