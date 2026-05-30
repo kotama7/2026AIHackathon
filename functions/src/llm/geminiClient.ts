@@ -18,8 +18,8 @@ export const TEMPERATURE = {
   SPEAKER: 0.7,
 } as const;
 
-/** 既定モデル。Gemini 1.5 Flash は無料枠が広く MVP に十分 */
-const DEFAULT_MODEL = 'gemini-1.5-flash';
+/** 既定モデル。Gemini 2.0 Flash は無料枠があり軽量で MVP に十分 (1.5-flash は廃止済み) */
+const DEFAULT_MODEL = 'gemini-2.0-flash';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RETRIES = 3;
@@ -64,7 +64,7 @@ export function resetGeminiClient(): void {
 export type CallGeminiOptions = {
   /** LLM に送るプロンプト本文 */
   prompt: string;
-  /** モデル名。未指定なら gemini-1.5-flash */
+  /** モデル名。未指定なら gemini-2.0-flash */
   model?: string;
   /** 0.0 - 1.0。未指定なら 0.7 */
   temperature?: number;
