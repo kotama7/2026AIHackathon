@@ -1,0 +1,80 @@
+name: Deploy
+
+# P5-06: Firebase Hosting (Next.js SSR / webframeworks) + Functions の自動デプロイ。
+#   - main マージ時: dev プロジェクト (aihackathon-8b383) の live channel へ本番デプロイ
+#   - PR 時:          preview channel へデプロイし、URL を PR にコメント投稿
+# CI は Linux で動くため、ローカル Windows の node-which 問題は発生しない。
+# prod プロジェクトを切る場合は PROJECT_ID と SA シークレットを差し替える。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# preview URL を PR にコメントするため pull-requests: write が必要
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # webframeworks は実験機能なので CLI に明示有効化させる
+  FIREBASE_CLI_EXPERIMENTS: webframeworks
+  PROJECT_ID: aihackathon-8b383
+
+jobs:
+  # PR: preview channel へデプロイ (hosting + SSR のみ。callable Functions は live を共有)
+  preview:
+    name: Deploy preview channel (PR)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_AIHACKATHON_8B383 }}
+          projectId: aihackathon-8b383
+          channelId: pr-${{ github.event.number }}
+          expires: 7d
+
+  # main: live channel へ hosting + functions をフルデプロイ
+  deploy:
+    name: Deploy live (main)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # サービスアカウント JSON を一時ファイルに展開し ADC として使う
+      - name: Write service account
+        env:
+          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_AIHACKATHON_8B383 }}
+        run: |
+          echo "$SA_JSON" > "$RUNNER_TEMP/sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+      - name: Deploy hosting + functions
+        run: |
+          pnpm dlx firebase-tools@15 deploy \
+            --only hosting,functions \
+            --project "$PROJECT_ID" \
+            --non-interactive \
+            --force
