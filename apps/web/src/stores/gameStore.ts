@@ -8,6 +8,8 @@ import type {
   GameMeta,
   InterrogationAction,
   Pin,
+  RevealTruthResponse,
+  TrialDecision,
 } from '@village/shared';
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
@@ -26,6 +28,12 @@ export type ContradictionDraft = {
   createdAtMs: number;
 };
 
+/** 裁判記録 (Firestore TrialDecision + outcome 拡張) */
+export type ClientTrialDecision = TrialDecision & {
+  id: string;
+  outcome: 'continue' | 'won' | 'lost';
+};
+
 type GameState = {
   gameId: GameId | null;
   meta: GameMeta | null;
@@ -35,6 +43,9 @@ type GameState = {
   pins: Pin[];
   interrogations: InterrogationPublic[];
   contradictions: ContradictionDraft[];
+  trials: ClientTrialDecision[];
+  /** ゲーム終了後に callRevealTruth で取得した真相。null=未取得 */
+  truthReveal: RevealTruthResponse | null;
 };
 
 type GameActions = {
@@ -53,6 +64,9 @@ type GameActions = {
   setContradictions: (contradictions: ContradictionDraft[]) => void;
   addContradiction: (contradiction: ContradictionDraft) => void;
   removeContradiction: (id: string) => void;
+  setTrials: (trials: ClientTrialDecision[]) => void;
+  addTrial: (trial: ClientTrialDecision) => void;
+  setTruthReveal: (truth: RevealTruthResponse | null) => void;
   reset: () => void;
 };
 
@@ -67,6 +81,8 @@ const initialState: GameState = {
   pins: [],
   interrogations: [],
   contradictions: [],
+  trials: [],
+  truthReveal: null,
 };
 
 export const useGameStore = create<Store>()(
@@ -149,6 +165,31 @@ export const useGameStore = create<Store>()(
           false,
           'removeContradiction'
         ),
+
+      setTrials: (trials) =>
+        set(
+          (state) => ({
+            // listener 経由で trial が来ても、ローカルで保持している outcome を保存する
+            trials: trials.map((t) => {
+              const existing = state.trials.find((x) => x.id === t.id);
+              return existing ? { ...t, outcome: existing.outcome } : t;
+            }),
+          }),
+          false,
+          'setTrials'
+        ),
+      addTrial: (trial) =>
+        set(
+          (state) => ({
+            // submit 直後は新しい outcome 込みで上書きする (id 一意 = day 単位)
+            trials: state.trials.some((t) => t.id === trial.id)
+              ? state.trials.map((t) => (t.id === trial.id ? trial : t))
+              : [...state.trials, trial],
+          }),
+          false,
+          'addTrial'
+        ),
+      setTruthReveal: (truth) => set({ truthReveal: truth }, false, 'setTruthReveal'),
 
       reset: () => set({ ...initialState }, false, 'reset'),
     }),

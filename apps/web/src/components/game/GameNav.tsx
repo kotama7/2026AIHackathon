@@ -46,15 +46,21 @@ export function GameNav({ gameId, children }: { gameId: string; children: ReactN
   const remainingPoints = useRemainingPoints();
   const pathname = usePathname();
 
+  const gameEnded = status !== null && status !== 'in_progress';
+
   const sections = useMemo(
     () =>
       SECTIONS.map((s) => {
         const href = s.slug ? `/play/${gameId}/${s.slug}` : `/play/${gameId}`;
-        const enabled = s.enabledIn.length === 0 || (phase && s.enabledIn.includes(phase));
+        // result は phase=='result' でなくとも status が終局していれば閲覧可
+        const enabled =
+          s.slug === 'result'
+            ? gameEnded || phase === 'result'
+            : s.enabledIn.length === 0 || (phase !== null && s.enabledIn.includes(phase));
         const active = pathname === href || (s.slug === '' && pathname === `/play/${gameId}`);
         return { ...s, href, enabled: Boolean(enabled), active };
       }),
-    [gameId, phase, pathname]
+    [gameId, phase, pathname, gameEnded]
   );
 
   return (

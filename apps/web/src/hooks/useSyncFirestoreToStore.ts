@@ -7,6 +7,7 @@ import type {
   GameMeta,
   InterrogationAction,
   Pin,
+  TrialDecision,
 } from '@village/shared';
 import { collection, doc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
@@ -44,6 +45,7 @@ export function useSyncFirestoreToStore(gameId: string | null): SyncState {
   const setLogs = useGameStore((s) => s.setLogs);
   const setPins = useGameStore((s) => s.setPins);
   const setInterrogations = useGameStore((s) => s.setInterrogations);
+  const setTrials = useGameStore((s) => s.setTrials);
   const reset = useGameStore((s) => s.reset);
 
   const [error, setError] = useState<Error | null>(null);
@@ -161,6 +163,22 @@ export function useSyncFirestoreToStore(gameId: string | null): SyncState {
       )
     );
 
+    // trials (id = day、outcome は submit 側で保持して setTrials がマージ保護する)
+    unsubs.push(
+      onSnapshot(
+        query(collection(db, `${gameBase}/trials`), orderBy('day', 'asc')),
+        (snap) => {
+          const trials = snap.docs.map((d) => ({
+            ...(d.data() as TrialDecision),
+            id: d.id,
+            outcome: 'continue' as const,
+          }));
+          setTrials(trials);
+        },
+        handleError
+      )
+    );
+
     setReady(true);
     setError(null);
 
@@ -178,6 +196,7 @@ export function useSyncFirestoreToStore(gameId: string | null): SyncState {
     setLogs,
     setPins,
     setInterrogations,
+    setTrials,
     reset,
   ]);
 
