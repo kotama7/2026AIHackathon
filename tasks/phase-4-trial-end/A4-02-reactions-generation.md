@@ -9,9 +9,11 @@ labels: [llm, functions]
 ---
 
 ## 概要
+
 弁明後、他のキャラ (生存者) が短く反応する。bias / relationship に従って支持 or 異議。
 
 ## 受け入れ条件
+
 - [ ] `generateReactions({ gameId, suspectId, defense })` が `{ characterId, text, stance: 'support'|'oppose'|'neutral' }[]` を返す
 - [ ] 生存キャラ全員から 1 発言ずつ (容疑者本人除く)
 - [ ] 各キャラの bias / relationship を context に
@@ -19,5 +21,6 @@ labels: [llm, functions]
 - [ ] 知識範囲ガード (A3-03) 適用
 
 ## 実装メモ
+
 - 並列 LLM 呼び出しでレイテンシ短縮
 - 人狼が容疑者で他キャラが疑っているケース: 反応の濃淡が物語性を作る

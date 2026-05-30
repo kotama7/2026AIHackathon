@@ -9,9 +9,11 @@ labels: [nextjs, firestore]
 ---
 
 ## 概要
+
 `apps/web/src/hooks/useSyncFirestoreToStore.ts` で Firestore のリアルタイム購読を Zustand に流す。
 
 ## 受け入れ条件
+
 - [ ] `useSyncFirestoreToStore(gameId)` を `/play/[gameId]/layout.tsx` で呼ぶ
 - [ ] `meta` の onSnapshot、変更を `gameStore.setMeta`
 - [ ] `characters/` の collection listener、`gameStore.setCharacters`
@@ -20,5 +22,6 @@ labels: [nextjs, firestore]
 - [ ] エラー時は store の `error` field にセット
 
 ## 実装メモ
+
 - 同時に複数 listener を張るので useEffect を分けるか集約するかは要設計
 - Strict Mode の double mount 対策 (cleanup を確実に)

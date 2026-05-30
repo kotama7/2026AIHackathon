@@ -1,5 +1,5 @@
-import type { CharacterId, FirebaseTimestamp, LogId } from './common.js';
 import type { EmotionalState } from './character.js';
+import type { CharacterId, FirebaseTimestamp, LogId } from './common.js';
 import type { TruthStatus } from './testimony.js';
 
 /** 発言意図 (LLM が出力、ゲームロジックがログ集約に使う) */

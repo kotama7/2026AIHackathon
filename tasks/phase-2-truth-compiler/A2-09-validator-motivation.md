@@ -9,9 +9,11 @@ labels: [llm, functions]
 ---
 
 ## 概要
+
 要件 §7.3 の思惑整合 (キャラ動機の妥当性) を検証。一部 LLM 評価あり。
 
 ## 受け入れ条件
+
 - [ ] 検証項目:
   - [ ] 全キャラに private_goal あり
   - [ ] 嘘証言には lie_reason あり (純ロジック)
@@ -21,5 +23,6 @@ labels: [llm, functions]
 - [ ] 失敗時は該当キャラ ID と理由をリスト返却
 
 ## 実装メモ
+
 - LLM judge は temperature 0.2 で安定化
 - ロジック検証だけで通せる項目は LLM 呼ばない

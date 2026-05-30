@@ -9,9 +9,11 @@ labels: [infra, ci]
 ---
 
 ## 概要
+
 全パッケージ共通の lint / format / pre-commit hook を設定する。
 
 ## 受け入れ条件
+
 - [ ] ルートに `.eslintrc.cjs` (または `eslint.config.js` flat config) と `.prettierrc.json`
 - [ ] `apps/web` は Next.js デフォルトの ESLint を継承
 - [ ] `functions/` は TS + Node 向け ESLint
@@ -20,5 +22,6 @@ labels: [infra, ci]
 - [ ] エディタ設定: `.vscode/settings.json` で format on save
 
 ## 実装メモ
+
 - TypeScript 5.x + `@typescript-eslint/*` を採用
 - import 順整理: `eslint-plugin-import` か `eslint-plugin-simple-import-sort`

@@ -9,9 +9,11 @@ labels: [functions]
 ---
 
 ## 概要
+
 ゲーム終了時に internal/caseTruth を整形して返す。プレイヤーの行動と比較できる構造にする。
 
 ## 受け入れ条件
+
 - [ ] `revealTruth({ gameId })` が `{ caseTruth, score, rank, comparison }` を返す
 - [ ] ゲームが status !== 'in_progress' の時のみ実行可
 - [ ] deduction_path の各 step に対し、プレイヤーが該当証拠/証言を取得していたかを `comparison` に
@@ -19,5 +21,6 @@ labels: [functions]
 - [ ] スコア breakdown も同梱
 
 ## 実装メモ
+
 - comparison: `{ step, hadEvidence: boolean[], hadTestimony: boolean[] }`
 - サマリー生成は temperature 0.3、結末の文章として読みやすく
