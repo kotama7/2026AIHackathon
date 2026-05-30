@@ -121,13 +121,17 @@ node scripts/sync-tasks.mjs             # 実同期 (81 Issue 作成)
 # Node 20 が必要
 node --version   # v20.x or later (22 でも動くが engine warning 出る)
 
+# Java 21+ が必要 (Firestore emulator のため、firebase-tools 15+ の要件)
+java --version   # 21 以上。Java 8 などでは emulator が起動しない
+# Windows: winget install Microsoft.OpenJDK.21
+
 # pnpm
 npm install -g pnpm
 pnpm --version   # 11.x
 
 # Firebase CLI
 npm install -g firebase-tools
-firebase --version
+firebase --version   # 15.x 以上
 firebase login
 
 # リポジトリ

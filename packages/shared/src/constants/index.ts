@@ -61,6 +61,7 @@ export const EVIDENCE_WEIGHT_DEFAULTS = {
 export const COLLECTIONS = {
   USERS: 'users',
   GAMES: 'games',
+  META: 'meta',
   CHARACTERS: 'characters',
   PUBLIC_LOGS: 'publicLogs',
   EVIDENCE: 'evidence',
