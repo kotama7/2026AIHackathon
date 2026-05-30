@@ -9,7 +9,8 @@
   },
   "scripts": {
     "build": "tsc --noEmit && node esbuild.config.mjs",
-    "build:watch": "tsc --watch --noEmit",
+    "build:tsc": "tsc",
+    "build:watch": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
     "test:rules": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --testPathPatterns=test/rules --testPathIgnorePatterns=/node_modules/",
@@ -24,17 +25,17 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
-    "@village/shared": "workspace:*",
     "firebase-admin": "^13.0.2",
     "firebase-functions": "^6.1.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.1",
+    "@village/shared": "workspace:*",
+    "esbuild": "^0.24.2",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.0",
     "cross-env": "^10.1.0",
-    "esbuild": "^0.28.0",
     "firebase": "^11.10.0",
     "firebase-functions-test": "^3.5.0",
     "jest": "^30.4.2",

@@ -242,6 +242,8 @@ out/
 
 # Firebase
 .firebase/
+.secret.local
+**/.secret.local
 firebase-debug.log*
 firestore-debug.log*
 ui-debug.log*
