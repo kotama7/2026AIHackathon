@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-base: #0e0f13;
+  --bg-elevated: #161821;
+  --text-primary: #e8e4d8;
+  --text-muted: #8c8678;
+  --accent-gold: #c8a24b;
+  --accent-danger: #a33b3b;
+  --accent-success: #6b8e4e;
+  --border-subtle: #2a2d38;
+  --font-sans: 'Noto Sans JP', system-ui, sans-serif;
+  --font-serif: 'Noto Serif JP', serif;
+}
+
+html,
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: var(--accent-gold);
+  color: var(--bg-base);
+}
