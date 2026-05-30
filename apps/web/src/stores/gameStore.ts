@@ -6,11 +6,33 @@ import type {
   EvidencePublic,
   GameId,
   GameMeta,
+  InterrogationAction,
   Pin,
+  RevealTruthResponse,
+  TrialDecision,
 } from '@village/shared';
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
+
+/** クライアントから見える尋問アクション。truthStatus (内部判定) は除外 */
+export type InterrogationPublic = Omit<InterrogationAction, 'truthStatus'>;
+
+/** プレイヤーが裁判フェーズ用に作成した矛盾候補 (複数ピンの束 + メモ) */
+export type ContradictionDraft = {
+  id: string;
+  /** 関連するピン ID 群 */
+  pinIds: string[];
+  /** プレイヤーのメモ */
+  note: string;
+  createdAtMs: number;
+};
+
+/** 裁判記録 (Firestore TrialDecision + outcome 拡張) */
+export type ClientTrialDecision = TrialDecision & {
+  id: string;
+  outcome: 'continue' | 'won' | 'lost';
+};
 
 type GameState = {
   gameId: GameId | null;
@@ -19,6 +41,11 @@ type GameState = {
   evidence: EvidencePublic[];
   logs: DialogueLog[];
   pins: Pin[];
+  interrogations: InterrogationPublic[];
+  contradictions: ContradictionDraft[];
+  trials: ClientTrialDecision[];
+  /** ゲーム終了後に callRevealTruth で取得した真相。null=未取得 */
+  truthReveal: RevealTruthResponse | null;
 };
 
 type GameActions = {
@@ -32,6 +59,14 @@ type GameActions = {
   setPins: (pins: Pin[]) => void;
   addPin: (pin: Pin) => void;
   removePin: (pinId: string) => void;
+  setInterrogations: (interrogations: InterrogationPublic[]) => void;
+  addInterrogation: (interrogation: InterrogationPublic) => void;
+  setContradictions: (contradictions: ContradictionDraft[]) => void;
+  addContradiction: (contradiction: ContradictionDraft) => void;
+  removeContradiction: (id: string) => void;
+  setTrials: (trials: ClientTrialDecision[]) => void;
+  addTrial: (trial: ClientTrialDecision) => void;
+  setTruthReveal: (truth: RevealTruthResponse | null) => void;
   reset: () => void;
 };
 
@@ -44,6 +79,10 @@ const initialState: GameState = {
   evidence: [],
   logs: [],
   pins: [],
+  interrogations: [],
+  contradictions: [],
+  trials: [],
+  truthReveal: null,
 };
 
 export const useGameStore = create<Store>()(
@@ -95,6 +134,63 @@ export const useGameStore = create<Store>()(
           'removePin'
         ),
 
+      setInterrogations: (interrogations) => set({ interrogations }, false, 'setInterrogations'),
+      addInterrogation: (intr) =>
+        set(
+          (state) => ({
+            interrogations: state.interrogations.some((i) => i.id === intr.id)
+              ? state.interrogations
+              : [...state.interrogations, intr],
+          }),
+          false,
+          'addInterrogation'
+        ),
+
+      setContradictions: (contradictions) => set({ contradictions }, false, 'setContradictions'),
+      addContradiction: (c) =>
+        set(
+          (state) => ({
+            contradictions: state.contradictions.some((x) => x.id === c.id)
+              ? state.contradictions
+              : [...state.contradictions, c],
+          }),
+          false,
+          'addContradiction'
+        ),
+      removeContradiction: (id) =>
+        set(
+          (state) => ({
+            contradictions: state.contradictions.filter((x) => x.id !== id),
+          }),
+          false,
+          'removeContradiction'
+        ),
+
+      setTrials: (trials) =>
+        set(
+          (state) => ({
+            // listener 経由で trial が来ても、ローカルで保持している outcome を保存する
+            trials: trials.map((t) => {
+              const existing = state.trials.find((x) => x.id === t.id);
+              return existing ? { ...t, outcome: existing.outcome } : t;
+            }),
+          }),
+          false,
+          'setTrials'
+        ),
+      addTrial: (trial) =>
+        set(
+          (state) => ({
+            // submit 直後は新しい outcome 込みで上書きする (id 一意 = day 単位)
+            trials: state.trials.some((t) => t.id === trial.id)
+              ? state.trials.map((t) => (t.id === trial.id ? trial : t))
+              : [...state.trials, trial],
+          }),
+          false,
+          'addTrial'
+        ),
+      setTruthReveal: (truth) => set({ truthReveal: truth }, false, 'setTruthReveal'),
+
       reset: () => set({ ...initialState }, false, 'reset'),
     }),
     {
@@ -142,4 +238,18 @@ export function useIsPinned(refType: Pin['refType'], refId: string): boolean {
 /** 特定 day のログのみ取得 */
 export function useDayLogs(day: number): DialogueLog[] {
   return useGameStore(useShallow((state) => state.logs.filter((l) => l.day === day)));
+}
+
+/** 特定キャラ宛の尋問履歴 */
+export function useInterrogationsFor(targetId: string | null): InterrogationPublic[] {
+  return useGameStore(
+    useShallow((state) =>
+      targetId
+        ? state.interrogations
+            .filter((i) => i.targetId === targetId)
+            .slice()
+            .sort((a, b) => a.day - b.day || a.createdAt.toMillis() - b.createdAt.toMillis())
+        : []
+    )
+  );
 }

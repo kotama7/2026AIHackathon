@@ -1,6 +1,14 @@
 'use client';
 
-import type { CharacterPublic, DialogueLog, EvidencePublic, GameMeta, Pin } from '@village/shared';
+import type {
+  CharacterPublic,
+  DialogueLog,
+  EvidencePublic,
+  GameMeta,
+  InterrogationAction,
+  Pin,
+  TrialDecision,
+} from '@village/shared';
 import { collection, doc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 
@@ -36,6 +44,8 @@ export function useSyncFirestoreToStore(gameId: string | null): SyncState {
   const setEvidence = useGameStore((s) => s.setEvidence);
   const setLogs = useGameStore((s) => s.setLogs);
   const setPins = useGameStore((s) => s.setPins);
+  const setInterrogations = useGameStore((s) => s.setInterrogations);
+  const setTrials = useGameStore((s) => s.setTrials);
   const reset = useGameStore((s) => s.reset);
 
   const [error, setError] = useState<Error | null>(null);
@@ -135,6 +145,40 @@ export function useSyncFirestoreToStore(gameId: string | null): SyncState {
       )
     );
 
+    // interrogations (truthStatus は backend で除外済み想定)
+    unsubs.push(
+      onSnapshot(
+        query(collection(db, `${gameBase}/interrogations`), orderBy('day', 'asc')),
+        (snap) => {
+          const intrs = snap.docs.map((d) => {
+            const raw = d.data() as InterrogationAction;
+            // 念のためクライアント側でも truthStatus を剥がす (鯖が漏らした場合の防御)
+            const { truthStatus: _t, ...rest } = raw;
+            void _t;
+            return rest;
+          });
+          setInterrogations(intrs);
+        },
+        handleError
+      )
+    );
+
+    // trials (id = day、outcome は submit 側で保持して setTrials がマージ保護する)
+    unsubs.push(
+      onSnapshot(
+        query(collection(db, `${gameBase}/trials`), orderBy('day', 'asc')),
+        (snap) => {
+          const trials = snap.docs.map((d) => ({
+            ...(d.data() as TrialDecision),
+            id: d.id,
+            outcome: 'continue' as const,
+          }));
+          setTrials(trials);
+        },
+        handleError
+      )
+    );
+
     setReady(true);
     setError(null);
 
@@ -142,7 +186,19 @@ export function useSyncFirestoreToStore(gameId: string | null): SyncState {
       for (const u of unsubs) u();
       setReady(false);
     };
-  }, [gameId, uid, setGameId, setMeta, setCharacters, setEvidence, setLogs, setPins, reset]);
+  }, [
+    gameId,
+    uid,
+    setGameId,
+    setMeta,
+    setCharacters,
+    setEvidence,
+    setLogs,
+    setPins,
+    setInterrogations,
+    setTrials,
+    reset,
+  ]);
 
   return { ready, error };
 }

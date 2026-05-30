@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { StartGameLoader } from '@/components/game/StartGameLoader';
 import { Button } from '@/components/ui';
@@ -12,9 +12,11 @@ import { useGameStore } from '@/stores/gameStore';
 
 export default function HomePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [recent, setRecent] = useState<RecentGame[]>([]);
+  const autoStartedRef = useRef(false);
 
   const setGameId = useGameStore((s) => s.setGameId);
   const setMeta = useGameStore((s) => s.setMeta);
@@ -27,29 +29,42 @@ export default function HomePage() {
     setRecent(listRecentGames());
   }, [starting]);
 
-  async function startGame(useSeed = false) {
-    setError(null);
-    setStarting(true);
-    reset();
-    try {
-      const res = await callStartNewGame({ useSeed });
-      setGameId(res.gameId);
-      setMeta(res.meta);
-      setCharacters(res.characters);
-      setEvidence(res.initialEvidence);
-      setLogs(res.initialLogs);
-      pushRecentGame({
-        gameId: res.gameId,
-        createdAt: new Date().toISOString(),
-        status: res.meta.status,
-        label: res.meta.isSeedGame ? 'seed' : undefined,
-      });
-      router.push(`/play/${res.gameId}`);
-    } catch (e) {
-      setError(e instanceof Error ? e : new Error(String(e)));
-      setStarting(false);
-    }
-  }
+  const startGame = useCallback(
+    async (useSeed = false) => {
+      setError(null);
+      setStarting(true);
+      reset();
+      try {
+        const res = await callStartNewGame({ useSeed });
+        setGameId(res.gameId);
+        setMeta(res.meta);
+        setCharacters(res.characters);
+        setEvidence(res.initialEvidence);
+        setLogs(res.initialLogs);
+        pushRecentGame({
+          gameId: res.gameId,
+          createdAt: new Date().toISOString(),
+          status: res.meta.status,
+          label: res.meta.isSeedGame ? 'seed' : undefined,
+        });
+        router.push(`/play/${res.gameId}`);
+      } catch (e) {
+        setError(e instanceof Error ? e : new Error(String(e)));
+        setStarting(false);
+      }
+    },
+    [reset, setGameId, setMeta, setCharacters, setEvidence, setLogs, router]
+  );
+
+  // ?replay=1 で B4-04 経由の自動 restart
+  useEffect(() => {
+    if (autoStartedRef.current) return;
+    if (searchParams.get('replay') !== '1') return;
+    autoStartedRef.current = true;
+    // URL から replay を剥がす (リロードで再発火させない)
+    router.replace('/', { scroll: false });
+    void startGame(false);
+  }, [searchParams, startGame, router]);
 
   return (
     <main className="flex min-h-screen items-center justify-center p-page">
