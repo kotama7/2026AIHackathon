@@ -9,9 +9,11 @@ labels: [functions]
 ---
 
 ## 概要
+
 要件 §10.10 の信頼度システム。プレイヤーのアクションに応じてキャラごとの trust_to_player と村全体の villageTrust を更新。
 
 ## 受け入れ条件
+
 - [ ] `calculateTrustDelta(action, context)` が `{ characterDeltas: Record<charId, number>, villageDelta: number }`
 - [ ] ルール:
   - 正しい矛盾指摘: 対象 +5、村 +3
@@ -23,5 +25,6 @@ labels: [functions]
 - [ ] 0-100 にクランプ
 
 ## 実装メモ
+
 - 「正しい矛盾指摘」の判定は `presentedEvidence` が `testimony.contradicted_by` を含むか
 - 純関数で書き、テスタブルに

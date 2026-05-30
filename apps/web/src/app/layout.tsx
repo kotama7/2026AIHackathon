@@ -1,7 +1,7 @@
+import './globals.css';
+
 import type { Metadata, Viewport } from 'next';
 import { Noto_Sans_JP, Noto_Serif_JP } from 'next/font/google';
-
-import './globals.css';
 
 const notoSansJP = Noto_Sans_JP({
   subsets: ['latin'],
@@ -20,8 +20,7 @@ const notoSerifJP = Noto_Serif_JP({
 });
 
 const SITE_NAME = 'AI村裁判';
-const SITE_DESCRIPTION =
-  'AIキャラクター同士の議論ログから人狼を特定する、一人用推理ゲーム';
+const SITE_DESCRIPTION = 'AIキャラクター同士の議論ログから人狼を特定する、一人用推理ゲーム';
 
 export const metadata: Metadata = {
   title: {

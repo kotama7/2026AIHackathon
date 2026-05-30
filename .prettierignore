@@ -1,0 +1,9 @@
+node_modules/
+dist/
+lib/
+.next/
+out/
+build/
+pnpm-lock.yaml
+**/*.d.ts
+apps/web/next-env.d.ts

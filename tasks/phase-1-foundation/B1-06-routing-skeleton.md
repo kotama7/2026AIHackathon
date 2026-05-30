@@ -9,9 +9,11 @@ labels: [nextjs]
 ---
 
 ## 概要
+
 App Router で全 11 画面に対応するルート構造を作成。中身は placeholder で OK。
 
 ## 受け入れ条件
+
 - [ ] `/` = タイトル
 - [ ] `/play/[gameId]` = ゲーム本体 (内部でフェーズ切替、ネスト route)
   - `/play/[gameId]/discussion` (議論ログ)
@@ -25,5 +27,6 @@ App Router で全 11 画面に対応するルート構造を作成。中身は p
 - [ ] 404 (`not-found.tsx`) と loading (`loading.tsx`)
 
 ## 実装メモ
+
 - 真相開示は結果ページ内のセクション or `/play/[gameId]/truth` 別ルートかは B4-03 で決める
 - フェーズ遷移は server side ではなく Zustand + プログラマティック router.push() で

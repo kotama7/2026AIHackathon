@@ -1,0 +1,115 @@
+rules_version = '2';
+
+// =============================================================================
+// AI村裁判 Firestore セキュリティルール (P0-06 / 要件 §3.3)
+//
+// 設計原則:
+//   1. クライアントは自分の game しか読めない
+//   2. クライアントからの書き込みは原則拒否 (Functions 経由のみ)
+//   3. internal/** は Admin SDK 専用 (caseTruth, secret, timeline)
+//   4. 例外: ピン留め (pins) と矛盾整理 (contradictions) は owner write 許可
+//      → これらは推理ノートで頻繁に更新されるため Functions 経由は重い
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------------------------------------------------------
+    // users/{uid}/ — ユーザー固有のゲーム情報
+    // -------------------------------------------------------------------------
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false; // Functions 経由のみ
+
+      match /games/{gameId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+
+        // meta, characters, publicLogs, evidence, interrogations, trials
+        // は Functions が書き込み、クライアントは read のみ
+        match /meta/{document=**} {
+          allow read: if isOwner(uid);
+          allow write: if false;
+        }
+        match /characters/{charId} {
+          allow read: if isOwner(uid);
+          allow write: if false;
+        }
+        match /publicLogs/{logId} {
+          allow read: if isOwner(uid);
+          allow write: if false;
+        }
+        match /evidence/{evidenceId} {
+          allow read: if isOwner(uid);
+          allow write: if false;
+        }
+        match /interrogations/{interrogationId} {
+          allow read: if isOwner(uid);
+          allow write: if false;
+        }
+        match /trials/{day} {
+          allow read: if isOwner(uid);
+          allow write: if false;
+        }
+
+        // pins と contradictions は owner が直接書ける例外
+        // (推理整理操作なので Functions 経由は overhead 過多)
+        match /pins/{pinId} {
+          allow read: if isOwner(uid);
+          allow create: if isOwner(uid) && isValidPin();
+          allow update: if isOwner(uid) && isValidPin();
+          allow delete: if isOwner(uid);
+        }
+        match /contradictions/{contradictionId} {
+          allow read: if isOwner(uid);
+          allow create: if isOwner(uid) && isValidContradiction();
+          allow update: if isOwner(uid) && isValidContradiction();
+          allow delete: if isOwner(uid);
+        }
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // internal/** — Truth Compiler の出力 (Admin SDK 専用)
+    // クライアントからは完全に隔離
+    // -------------------------------------------------------------------------
+    match /internal/{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // それ以外 — 全拒否 (明示的に許可した path のみアクセス可)
+    // -------------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+// =============================================================================
+// ヘルパー関数
+// =============================================================================
+
+function isOwner(uid) {
+  return request.auth != null && request.auth.uid == uid;
+}
+
+function isValidPin() {
+  let d = request.resource.data;
+  return d.keys().hasAll(['refType', 'refId', 'day'])
+    && d.refType in ['log', 'evidence', 'testimony']
+    && d.refId is string
+    && d.day is int
+    && d.day >= 1
+    && d.day <= 3;
+}
+
+function isValidContradiction() {
+  let d = request.resource.data;
+  return d.keys().hasAll(['pinIds', 'note'])
+    && d.pinIds is list
+    && d.pinIds.size() >= 2
+    && d.pinIds.size() <= 6
+    && d.note is string
+    && d.note.size() <= 500;
+}

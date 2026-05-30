@@ -9,9 +9,11 @@ labels: [functions]
 ---
 
 ## 概要
+
 要件 §10.12 のスコア評価。プレイ終了時に集計してランク決定。
 
 ## 受け入れ条件
+
 - [ ] `calculateScore(gameId)` が `{ rank: 'S'|'A'|'B'|'C'|'D', breakdown }` を返す
 - [ ] breakdown 項目:
   - 人狼特定成否 (大配点)
@@ -29,5 +31,6 @@ labels: [functions]
   - D: 冤罪 + 信頼崩壊
 
 ## 実装メモ
+
 - 各 breakdown を出すことで真相開示画面で「ここが惜しかった」表示が可能
 - 純関数、Firestore 読み取りのみ

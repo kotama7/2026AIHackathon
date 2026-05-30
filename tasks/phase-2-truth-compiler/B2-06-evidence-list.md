@@ -9,9 +9,11 @@ labels: [nextjs, ui]
 ---
 
 ## 概要
+
 要件 §11.3 の証拠一覧。EvidenceCard グリッド + フィルタ (確度・関連人物)。
 
 ## 受け入れ条件
+
 - [ ] `/play/[gameId]/evidence` ルート
 - [ ] EvidenceCard グリッド (Firestore listener で自動更新)
 - [ ] フィルタ: 関連人物 (キャラ複数選択)、確度 (A/B/C)、入手日
@@ -20,5 +22,6 @@ labels: [nextjs, ui]
 - [ ] true_interpretation 等の内部情報は絶対に表示しない
 
 ## 実装メモ
+
 - フィルタ状態は URL query で持つと shareable
 - ソートデフォルト: 入手日降順

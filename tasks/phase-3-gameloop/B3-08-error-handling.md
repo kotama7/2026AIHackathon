@@ -9,9 +9,11 @@ labels: [nextjs, ui]
 ---
 
 ## 概要
+
 LLM 起因のタイムアウト・ネットワーク切断時のリトライ UI を整備。
 
 ## 受け入れ条件
+
 - [ ] Functions エラーコード別の日本語メッセージ
   - `insufficient_points`: 「尋問ポイントが足りません」
   - `llm_failure`: 「AI 生成に失敗しました。リトライしますか?」
@@ -22,5 +24,6 @@ LLM 起因のタイムアウト・ネットワーク切断時のリトライ UI 
 - [ ] エラー時もアプリが落ちない (Error Boundary)
 
 ## 実装メモ
+
 - React Error Boundary をルートレイアウトに
 - Toast は `sonner` or 自前
