@@ -2,8 +2,19 @@ packages:
   - 'apps/*'
   - 'functions'
   - 'packages/*'
-allowBuilds:
-  '@firebase/util': set this to true or false
-  protobufjs: set this to true or false
-  sharp: set this to true or false
-  unrs-resolver: set this to true or false
+
+# esbuild は postinstall でプラットフォーム別バイナリを配置するため、ビルドを許可する。
+onlyBuiltDependencies:
+  - esbuild
+
+# 以下のパッケージの postinstall (build script) は実行せず無視する。
+# pnpm 11 はこのリストに無いパッケージで build script が無視されると
+# [ERR_PNPM_IGNORED_BUILDS] でエラー終了するため、明示的に acknowledge する。
+# - sharp: Next.js image optimization 用 (実行時に必要な場合のみ要、CI/build ではスキップで可)
+# - @firebase/util, protobufjs: notice script のみで実害なし
+# - unrs-resolver: ts-eslint の native bindings (slowpath にフォールバック)
+ignoredBuiltDependencies:
+  - '@firebase/util'
+  - protobufjs
+  - sharp
+  - unrs-resolver

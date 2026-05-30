@@ -1,0 +1,522 @@
+/**
+ * Phase 2 Truth Compiler テスト共有フィクスチャ。
+ *
+ * `makeValidCaseTruth()` は caseTruthSchema を通過し、かつ要件 §6.7 の推理可能性
+ * 閾値 (werewolf 7-10 / redHerring 4-6 / gap 2-4) を満たす「良いケース」を返す。
+ *
+ * Validator / Repairer / Compiler のテストはこれを clone して一部を壊し、
+ * 失敗ケースを作る。常に deep clone を返すのでテスト間で汚染しない。
+ *
+ * 固定設定:
+ * - 容疑者 char_1..char_6、人狼 char_3、レッドヘリング char_5、被害者 victim_1。
+ * - 知識範囲 (knownFacts) はタイムラインの actor/observedBy と整合済み。
+ * - 証拠スコア: char_3 = 8, char_5 = 5, char_2 = 1 (gap 3)。
+ */
+import type {
+  CaseTruth,
+  Character,
+  Evidence,
+  LocationGraph,
+  PlannedLie,
+  Testimony,
+  TimelineEvent,
+} from '@village/shared';
+
+const VICTIM_ID = 'victim_1';
+
+const locationGraph: LocationGraph = {
+  locations: ['private_room', 'lobby', 'clock_tower', 'library', 'courtyard', 'basement'],
+  adjacency: {
+    private_room: ['lobby'],
+    lobby: ['private_room', 'clock_tower', 'library', 'courtyard'],
+    clock_tower: ['lobby', 'courtyard'],
+    library: ['lobby', 'basement'],
+    courtyard: ['lobby', 'clock_tower'],
+    basement: ['library'],
+  },
+  displayNames: {
+    private_room: '自室',
+    lobby: 'ロビー',
+    clock_tower: '時計塔',
+    library: '図書室',
+    courtyard: '中庭',
+    basement: '地下室',
+  },
+};
+
+function char(
+  id: string,
+  name: string,
+  overrides: Partial<Character> & Pick<Character, 'secret' | 'privateGoal' | 'fear'>
+): Character {
+  return {
+    id,
+    name,
+    publicPersonality: '物腰はやわらかいが芯がある',
+    speakingStyle: '落ち着いた口調',
+    socialRole: '村の住人',
+    accentColor: '#888888',
+    isAlive: true,
+    trustToPlayer: 50,
+    role: 'villager',
+    isWerewolf: false,
+    bias: '特になし',
+    knownFacts: [],
+    suspicions: {},
+    emotionalState: 'calm',
+    lieTendency: 20,
+    cooperationLevel: 60,
+    liePolicy: { willLieAbout: [], willNotLieAbout: ['own_role'] },
+    cooperationPolicy: { cooperateWith: [], conditions: '信頼できる相手には協力する' },
+    relationships: [],
+    ...overrides,
+  };
+}
+
+const characters: Character[] = [
+  char('char_1', 'ミナ', {
+    secret: '事件当夜ロビーで密かに手紙を読んでいた',
+    privateGoal: '私的な手紙の存在を知られたくない',
+    fear: '事件に巻き込まれること',
+    socialRole: '時計塔の管理人',
+    knownFacts: ['time_1', 'time_6'],
+  }),
+  char('char_2', 'ケンジ', {
+    secret: '図書室で禁書を読んでいた',
+    privateGoal: '禁書を読んでいたことを隠したい',
+    fear: '司書に叱られること',
+    socialRole: '宿屋の若主人',
+    knownFacts: ['time_7'],
+  }),
+  char('char_3', 'ソラ', {
+    secret: '自分が人狼であること、被害者を襲撃したこと',
+    privateGoal: '人狼であることを隠し、疑いを他者へ逸らして生き残る',
+    fear: '時計塔への移動を突き止められること',
+    socialRole: '渡り商人',
+    role: 'werewolf',
+    isWerewolf: true,
+    emotionalState: 'tense',
+    lieTendency: 80,
+    cooperationLevel: 30,
+    bias: 'char_1 に疑いを向けたい',
+    liePolicy: { willLieAbout: ['night_location', 'attack'], willNotLieAbout: [] },
+    knownFacts: ['time_1', 'time_2', 'time_3', 'time_6'],
+  }),
+  char('char_4', 'タケシ', {
+    secret: '早々に酒を飲んで眠ってしまった',
+    privateGoal: '見張り役なのに眠っていたことを隠したい',
+    fear: '職務怠慢を責められること',
+    socialRole: '元兵士の鍛冶屋',
+    knownFacts: ['time_8'],
+  }),
+  char('char_5', 'ユリ', {
+    secret: '中庭で別の住民と密会していた',
+    privateGoal: '密会を隠したい',
+    fear: '密会の相手に迷惑がかかること',
+    socialRole: '医師見習い',
+    emotionalState: 'fearful',
+    lieTendency: 45,
+    bias: '人に疑われやすいと感じている',
+    liePolicy: { willLieAbout: ['night_location'], willNotLieAbout: ['own_role'] },
+    knownFacts: ['time_5', 'time_9'],
+  }),
+  char('char_6', 'アヤメ', {
+    secret: '中庭で char_5 を目撃したが記憶が曖昧',
+    privateGoal: '不確かな証言で誰かを陥れたくない',
+    fear: '誤った証言をすること',
+    socialRole: '図書室の司書',
+    knownFacts: ['time_5', 'time_9'],
+  }),
+];
+
+const timeline: TimelineEvent[] = [
+  {
+    id: 'time_1',
+    time: '23:50',
+    character: 'char_3',
+    location: 'lobby',
+    action: 'ロビーを通って時計塔へ向かう',
+    knownBy: ['char_3'],
+    observedBy: ['char_1'],
+    causesEvidence: ['ev_c1'],
+  },
+  {
+    id: 'time_2',
+    time: '00:05',
+    character: 'char_3',
+    location: 'clock_tower',
+    action: '時計塔に到着する',
+    knownBy: ['char_3'],
+    observedBy: [],
+    causesEvidence: ['ev_c2'],
+  },
+  {
+    id: 'time_3',
+    time: '00:10',
+    character: 'char_3',
+    location: 'clock_tower',
+    action: '被害者を襲撃する',
+    knownBy: ['char_3'],
+    observedBy: [],
+    causesEvidence: ['ev_s1'],
+  },
+  {
+    id: 'time_4',
+    time: '00:08',
+    character: VICTIM_ID,
+    location: 'clock_tower',
+    action: '時計塔で人を待つ',
+    knownBy: [VICTIM_ID],
+    observedBy: [],
+    causesEvidence: [],
+  },
+  {
+    id: 'time_5',
+    time: '23:55',
+    character: 'char_5',
+    location: 'courtyard',
+    action: '中庭で密会する',
+    knownBy: ['char_5'],
+    observedBy: ['char_6'],
+    causesEvidence: ['ev_s2', 'ev_n1'],
+  },
+  {
+    id: 'time_6',
+    time: '23:50',
+    character: 'char_1',
+    location: 'lobby',
+    action: 'ロビーで手紙を読む',
+    knownBy: ['char_1'],
+    observedBy: ['char_3'],
+    causesEvidence: [],
+  },
+  {
+    id: 'time_7',
+    time: '23:40',
+    character: 'char_2',
+    location: 'library',
+    action: '図書室で本を読む',
+    knownBy: ['char_2'],
+    observedBy: [],
+    causesEvidence: ['ev_n2'],
+  },
+  {
+    id: 'time_8',
+    time: '23:30',
+    character: 'char_4',
+    location: 'private_room',
+    action: '自室で眠ってしまう',
+    knownBy: ['char_4'],
+    observedBy: [],
+    causesEvidence: [],
+  },
+  {
+    id: 'time_9',
+    time: '23:58',
+    character: 'char_6',
+    location: 'courtyard',
+    action: '中庭で char_5 を見かける',
+    knownBy: ['char_6'],
+    observedBy: ['char_5'],
+    causesEvidence: ['ev_n3'],
+  },
+];
+
+const evidence: Evidence[] = [
+  {
+    id: 'ev_c1',
+    day: 1,
+    name: '深夜の扉ログ',
+    description: 'ロビーの扉が 23:50 に内側から開いた記録がある。',
+    reliability: 'B',
+    relatedCharacters: ['char_3'],
+    category: 'confirmatory',
+    pointsTo: ['char_3'],
+    weight: 3,
+    ambiguity: 1,
+    trueInterpretation: 'char_3 が時計塔へ向かうためロビーを通過したことを示す。',
+    sourceTimelineEvent: 'time_1',
+  },
+  {
+    id: 'ev_c2',
+    day: 1,
+    name: '時計塔の足跡',
+    description: '時計塔の階段に、ロビー側からの新しい泥跡が残っている。',
+    reliability: 'A',
+    relatedCharacters: ['char_3'],
+    category: 'confirmatory',
+    pointsTo: ['char_3'],
+    weight: 3,
+    ambiguity: 1,
+    trueInterpretation: 'char_3 が時計塔に到達したことを示す。',
+    sourceTimelineEvent: 'time_2',
+  },
+  {
+    id: 'ev_s1',
+    day: 2,
+    name: '争った痕跡',
+    description: '時計塔の床に、もみ合ったような乱れと布の切れ端。',
+    reliability: 'B',
+    relatedCharacters: ['char_3'],
+    category: 'supporting',
+    pointsTo: ['char_3'],
+    weight: 2,
+    ambiguity: 1,
+    trueInterpretation: '襲撃が時計塔で起きたことを補強する。',
+    sourceTimelineEvent: 'time_3',
+  },
+  {
+    id: 'ev_s2',
+    day: 2,
+    name: '中庭の小さな足跡',
+    description: '中庭に複数人が立ち止まった跡。誰かと会っていたように見える。',
+    reliability: 'C',
+    relatedCharacters: ['char_5'],
+    category: 'supporting',
+    pointsTo: ['char_5'],
+    weight: 2,
+    ambiguity: 2,
+    trueInterpretation: 'char_5 が中庭で密会していた (事件とは無関係)。',
+    sourceTimelineEvent: 'time_5',
+  },
+  {
+    id: 'ev_n1',
+    day: 1,
+    name: '泥のついたショール',
+    description: 'char_5 のショールに中庭の泥がついていた。',
+    reliability: 'C',
+    relatedCharacters: ['char_5'],
+    category: 'noise',
+    pointsTo: ['char_5'],
+    weight: 2,
+    ambiguity: 3,
+    trueInterpretation: '中庭にいた痕跡だが、襲撃とは無関係。',
+    sourceTimelineEvent: 'time_5',
+  },
+  {
+    id: 'ev_n2',
+    day: 3,
+    name: '図書室の灯り',
+    description: '深夜に図書室の灯りがついていたという証言。',
+    reliability: 'C',
+    relatedCharacters: ['char_2'],
+    category: 'noise',
+    pointsTo: ['char_2'],
+    weight: 1,
+    ambiguity: 2,
+    trueInterpretation: 'char_2 が読書していただけ。',
+    sourceTimelineEvent: 'time_7',
+  },
+  {
+    id: 'ev_n3',
+    day: 3,
+    name: '破れた紙片',
+    description: '「いつもの場所で」とだけ読める紙片が中庭で見つかった。',
+    reliability: 'C',
+    relatedCharacters: ['char_5'],
+    category: 'noise',
+    pointsTo: ['char_5'],
+    weight: 1,
+    ambiguity: 3,
+    trueInterpretation: 'char_5 の密会の約束。事件とは無関係。',
+    sourceTimelineEvent: 'time_9',
+  },
+];
+
+const testimonies: Testimony[] = [
+  {
+    id: 't1',
+    day: 1,
+    speakerId: 'char_1',
+    text: '23:50 頃、ロビーで読みものをしていました。',
+    truthStatus: 'truth',
+    contradictedBy: [],
+    knownFactsUsed: ['time_6'],
+  },
+  {
+    id: 't2',
+    day: 1,
+    speakerId: 'char_1',
+    text: '誰かが足早にロビーを通っていった気がします。',
+    truthStatus: 'truth',
+    contradictedBy: [],
+    knownFactsUsed: ['time_1'],
+  },
+  {
+    id: 't3',
+    day: 1,
+    speakerId: 'char_2',
+    text: '私は図書室で本を読んでいました。',
+    truthStatus: 'truth',
+    contradictedBy: [],
+    knownFactsUsed: ['time_7'],
+  },
+  {
+    id: 't4',
+    day: 2,
+    speakerId: 'char_2',
+    text: '物音は…聞こえなかったと思います。たぶん。',
+    truthStatus: 'uncertainty',
+    contradictedBy: [],
+    knownFactsUsed: [],
+  },
+  {
+    id: 't5',
+    day: 1,
+    speakerId: 'char_3',
+    text: '私は一晩中、自室にいました。',
+    truthStatus: 'lie',
+    lieReason: '時計塔への移動と襲撃を隠すため',
+    contradictedBy: ['ev_c1', 'ev_c2'],
+    knownFactsUsed: ['time_1'],
+  },
+  {
+    id: 't6',
+    day: 2,
+    speakerId: 'char_3',
+    text: 'ロビーには近づいていません。',
+    truthStatus: 'lie',
+    lieReason: 'ロビーでの目撃を否定するため',
+    contradictedBy: ['ev_c1'],
+    knownFactsUsed: ['time_6'],
+  },
+  {
+    id: 't7',
+    day: 1,
+    speakerId: 'char_4',
+    text: '早くに自室で休んでいました。',
+    truthStatus: 'truth',
+    contradictedBy: [],
+    knownFactsUsed: ['time_8'],
+  },
+  {
+    id: 't8',
+    day: 2,
+    speakerId: 'char_4',
+    text: '特に、何も…。',
+    truthStatus: 'omission',
+    contradictedBy: [],
+    knownFactsUsed: [],
+  },
+  {
+    id: 't9',
+    day: 1,
+    speakerId: 'char_5',
+    text: '夜は中庭になど出ていません。',
+    truthStatus: 'lie',
+    lieReason: '中庭での密会を隠すため (事件とは無関係)',
+    contradictedBy: ['ev_n1'],
+    knownFactsUsed: ['time_5'],
+  },
+  {
+    id: 't10',
+    day: 2,
+    speakerId: 'char_5',
+    text: 'char_6 とは少し言葉を交わした気がします。',
+    truthStatus: 'truth',
+    contradictedBy: [],
+    knownFactsUsed: ['time_9'],
+  },
+  {
+    id: 't11',
+    day: 1,
+    speakerId: 'char_6',
+    text: '中庭で char_5 を見かけました。',
+    truthStatus: 'truth',
+    contradictedBy: [],
+    knownFactsUsed: ['time_9'],
+  },
+  {
+    id: 't12',
+    day: 2,
+    speakerId: 'char_6',
+    text: 'char_5 は時計塔の方へ歩いていったように見えました。',
+    truthStatus: 'misunderstanding',
+    contradictedBy: [],
+    knownFactsUsed: ['time_5'],
+  },
+];
+
+const plannedLies: PlannedLie[] = [
+  {
+    liarId: 'char_3',
+    content: '自室にいたと主張する',
+    reason: '時計塔への移動と襲撃を隠すため',
+    hiddenTruth: '実際はロビーを経由して時計塔に移動し、被害者を襲撃した',
+    contradictedBy: ['ev_c1', 'ev_c2', 'time_1'],
+    reactionWhenExposed: '動揺し、char_1 に疑いを逸らそうとする',
+  },
+  {
+    liarId: 'char_5',
+    content: '中庭に出ていないと主張する',
+    reason: '密会を隠すため',
+    hiddenTruth: '中庭で別の住民と密会していた',
+    contradictedBy: ['ev_n1'],
+    reactionWhenExposed: '言葉に詰まり沈黙する',
+  },
+];
+
+const baseCaseTruth: CaseTruth = {
+  caseId: 'case_test',
+  summary: {
+    victimId: VICTIM_ID,
+    werewolfId: 'char_3',
+    attackTime: '00:10',
+    attackLocation: 'clock_tower',
+    solutionLogic:
+      '00:10 に時計塔へ到達できたのは char_3 のみ。扉ログと足跡が移動を裏づけ、自室にいたという証言と矛盾する。char_5 の不審さは中庭での密会で説明でき、事件とは無関係。',
+  },
+  characters,
+  timeline,
+  evidence,
+  testimonies,
+  plannedLies,
+  redHerrings: [
+    {
+      characterId: 'char_5',
+      reason: '中庭での密会を隠すため夜の外出を否定し、矛盾を抱えるため怪しく見える',
+    },
+  ],
+  deductionPath: {
+    steps: [
+      {
+        step: 1,
+        reasoning:
+          '襲撃時刻 00:10 に時計塔へ到達できたのは、ロビー経由で移動した char_3 のみ。図書室・自室にいた住民は除外。',
+        requiredEvidence: ['ev_c1', 'ev_c2'],
+        requiredTestimonies: [],
+        excludedSuspects: ['char_2', 'char_4'],
+      },
+      {
+        step: 2,
+        reasoning:
+          'char_5 の不審な夜間外出は中庭での密会 (ev_s2) で説明でき、事件とは無関係。char_1・char_6 は目撃側で動機もない。',
+        requiredEvidence: ['ev_s2'],
+        requiredTestimonies: ['t10', 't11'],
+        excludedSuspects: ['char_1', 'char_5', 'char_6'],
+      },
+      {
+        step: 3,
+        reasoning:
+          'char_3 の「自室にいた」証言は扉ログ・足跡 (ev_c1, ev_c2) と矛盾。時計塔の争った痕跡 (ev_s1) が襲撃を裏づけ、char_3 が人狼と確定する。',
+        requiredEvidence: ['ev_c1', 'ev_c2', 'ev_s1'],
+        requiredTestimonies: ['t5'],
+        excludedSuspects: [],
+      },
+    ],
+    finalTarget: 'char_3',
+  },
+  locationGraph,
+  validationResult: { passed: true, issues: [] },
+};
+
+/** baseCaseTruth の deep clone を返す (テスト間汚染防止)。overrides は浅くマージ。 */
+export function makeValidCaseTruth(overrides: Partial<CaseTruth> = {}): CaseTruth {
+  const clone = structuredClone(baseCaseTruth);
+  return { ...clone, ...overrides };
+}
+
+/** deep clone ユーティリティ (失敗ケースを作るときに使う)。 */
+export function cloneCaseTruth(truth: CaseTruth): CaseTruth {
+  return structuredClone(truth);
+}

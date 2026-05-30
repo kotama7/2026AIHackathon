@@ -264,3 +264,6 @@ Thumbs.db
 !**/src/lib/
 !**/src/lib/**
 
+
+# Truth Compiler e2e 計測結果 (A2-13)
+functions/test/results/

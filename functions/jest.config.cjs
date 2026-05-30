@@ -13,8 +13,9 @@ module.exports = {
   testEnvironment: 'node',
   extensionsToTreatAsEsm: ['.ts'],
   testMatch: ['<rootDir>/test/**/*.test.ts'],
-  // rules テストは emulator 必須なのでデフォルトから除外。test:rules で別実行する。
-  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/test/rules/'],
+  // rules テストは emulator 必須、e2e は実 Gemini 必須なのでデフォルトから除外。
+  // それぞれ test:rules / test:e2e:truth-compiler で別実行する。
+  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/test/rules/', '<rootDir>/test/e2e/'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
     '^@village/shared$': '<rootDir>/../packages/shared/src/index.ts',
