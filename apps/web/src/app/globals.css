@@ -3,26 +3,91 @@
 @tailwind utilities;
 
 :root {
+  /* 背景 */
   --bg-base: #0e0f13;
   --bg-elevated: #161821;
+  --bg-overlay: rgba(14, 15, 19, 0.85);
+
+  /* テキスト */
   --text-primary: #e8e4d8;
   --text-muted: #8c8678;
+  --text-emphasis: #f5f1e3;
+
+  /* アクセント */
   --accent-gold: #c8a24b;
+  --accent-gold-strong: #d9b25a;
   --accent-danger: #a33b3b;
+  --accent-danger-strong: #c14a4a;
   --accent-success: #6b8e4e;
+  --accent-info: #4d7799;
+
+  /* 罫線 */
   --border-subtle: #2a2d38;
-  --font-sans: 'Noto Sans JP', system-ui, sans-serif;
-  --font-serif: 'Noto Serif JP', serif;
+  --border-strong: #3d4150;
+
+  /* 影 (ミステリー演出: 沈み込む影) */
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.45);
+  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+
+  /* タイポグラフィスケール */
+  --line-tight: 1.25;
+  --line-normal: 1.6;
+  --line-relaxed: 1.85;
+  --tracking-display: -0.015em;
+  --tracking-body: 0.005em;
 }
 
 html,
 body {
   background-color: var(--bg-base);
   color: var(--text-primary);
-  font-family: var(--font-sans);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  line-height: var(--line-normal);
+  letter-spacing: var(--tracking-body);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif), serif;
+  line-height: var(--line-tight);
+  letter-spacing: var(--tracking-display);
 }
 
 ::selection {
   background: var(--accent-gold);
   color: var(--bg-base);
+}
+
+/* WebKit スクロールバー (古びた金) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-base);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 6px;
+  border: 2px solid var(--bg-base);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-gold);
+}
+
+/* Firefox */
+* {
+  scrollbar-color: var(--border-subtle) var(--bg-base);
+  scrollbar-width: thin;
+}
+
+/* フォーカスリング (アクセシビリティ) */
+:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
+  border-radius: 2px;
 }

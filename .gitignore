@@ -260,3 +260,7 @@ Thumbs.db
 # Sync script temp files
 .sync-body-*.tmp
 
+# JS のソース内 lib/ は ignore 対象外 (上の lib/ パターンが apps/web/src/lib/ などにも誤マッチするため救済)
+!**/src/lib/
+!**/src/lib/**
+
