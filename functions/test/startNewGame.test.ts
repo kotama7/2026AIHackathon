@@ -37,15 +37,22 @@ const setManyTimeline = jest.fn<() => Promise<void>>().mockResolvedValue(undefin
 
 jest.unstable_mockModule('../src/db/admin.js', () => ({
   userDb: {
-    meta: { set: setMeta },
-    characters: { set: setChar },
+    meta: { set: setMeta, get: jest.fn(), update: jest.fn(), ref: jest.fn() },
+    characters: {
+      set: setChar,
+      list: jest.fn(),
+      ref: jest.fn(),
+      col: jest.fn(),
+    },
     evidence: { addMany: addManyEvidence },
-    publicLogs: { add: addLog },
+    publicLogs: { add: addLog, col: jest.fn() },
+    interrogations: { add: jest.fn(), col: jest.fn() },
   },
   internalDb: {
-    caseTruth: { set: setCaseTruth },
-    characterSecrets: { setMany: setManySecrets },
-    timeline: { setMany: setManyTimeline },
+    caseTruth: { set: setCaseTruth, get: jest.fn(), ref: jest.fn() },
+    characterSecrets: { setMany: setManySecrets, get: jest.fn(), col: jest.fn() },
+    timeline: { setMany: setManyTimeline, list: jest.fn(), get: jest.fn(), col: jest.fn() },
+    logMetadata: { add: jest.fn(), col: jest.fn() },
   },
   nowTimestamp: () => ({
     seconds: 1700000000,
@@ -53,6 +60,14 @@ jest.unstable_mockModule('../src/db/admin.js', () => ({
     toDate: () => new Date(1700000000 * 1000),
     toMillis: () => 1700000000 * 1000,
   }),
+  // A3-04/05/08/09 で追加: transaction ヘルパ。
+  // この test では使わないので空 mock で import エラーを回避するだけ。
+  runTransaction: jest.fn(),
+  adminDb: {},
+  serverTimestamp: jest.fn(),
+  toTimestamp: jest.fn(),
+  FieldValue: {},
+  Timestamp: {},
 }));
 
 const functionsTestInit = (await import('firebase-functions-test')).default;
