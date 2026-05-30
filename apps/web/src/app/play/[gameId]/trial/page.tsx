@@ -128,7 +128,8 @@ export default function TrialPage({ params }: { params: Promise<{ gameId: string
 
       const now = new Date();
       const trial: ClientTrialDecision = {
-        id: `trial-day-${meta.currentDay}`,
+        // doc id は Functions 側 (userDb.trials.set) と揃える: `day${day}`
+        id: `day${meta.currentDay}`,
         day: meta.currentDay,
         suspectId,
         presentedEvidence,

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { type ReactNode, useMemo } from 'react';
 
+import { ModeBadge } from '@/components/game/ModeBadge';
 import { PhaseTransition } from '@/components/game/PhaseTransition';
 import { cn } from '@/components/ui/cn';
 import { useSyncFirestoreToStore } from '@/hooks/useSyncFirestoreToStore';
@@ -74,6 +75,7 @@ export function GameNav({ gameId, children }: { gameId: string; children: ReactN
             >
               AI村裁判
             </Link>
+            <ModeBadge />
             {day && phase && (
               <span className="rounded-card border border-brand-border bg-brand-bg px-3 py-1 text-xs text-brand-muted">
                 Day {day} / {PHASE_LABELS[phase]}
