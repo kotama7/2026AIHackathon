@@ -3,6 +3,8 @@ import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { Noto_Sans_JP, Noto_Serif_JP } from 'next/font/google';
 
+import { ErrorBoundary } from '@/components/game/ErrorBoundary';
+import { OfflineBanner } from '@/components/game/OfflineBanner';
 import { AuthProvider } from '@/lib/firebase/auth';
 
 const notoSansJP = Noto_Sans_JP({
@@ -55,7 +57,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ja" className={`${notoSansJP.variable} ${notoSerifJP.variable}`}>
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <OfflineBanner />
+        <ErrorBoundary>
+          <AuthProvider>{children}</AuthProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

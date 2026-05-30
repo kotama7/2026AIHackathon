@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { type ReactNode, useMemo } from 'react';
 
+import { PhaseTransition } from '@/components/game/PhaseTransition';
 import { cn } from '@/components/ui/cn';
 import { useSyncFirestoreToStore } from '@/hooks/useSyncFirestoreToStore';
 import { useGamePhaseInfo, useRemainingPoints } from '@/stores/gameStore';
@@ -94,6 +95,7 @@ export function GameNav({ gameId, children }: { gameId: string; children: ReactN
         </nav>
       </header>
       <main className="mx-auto w-full max-w-board flex-1 p-page">{children}</main>
+      <PhaseTransition />
     </div>
   );
 }

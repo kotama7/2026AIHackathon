@@ -1,11 +1,11 @@
 'use client';
 
 import type { CharacterPublic, DialogueLog, GameDay } from '@village/shared';
-import { use as usePromise, useMemo, useState } from 'react';
+import { use as usePromise, useEffect, useMemo, useRef, useState } from 'react';
 
 import { CharacterProfileModal } from '@/components/game/CharacterProfileModal';
 import { usePinToggle } from '@/components/game/usePinToggle';
-import { cn, LogBubble } from '@/components/ui';
+import { Badge, cn, LogBubble } from '@/components/ui';
 import { useGameStore } from '@/stores/gameStore';
 
 const DAYS: GameDay[] = [1, 2, 3];
@@ -32,6 +32,9 @@ export default function DiscussionPage({ params }: { params: Promise<{ gameId: s
   const [selectedDay, setSelectedDay] = useState<GameDay>((meta?.currentDay ?? 1) as GameDay);
   const [profileChar, setProfileChar] = useState<CharacterPublic | null>(null);
   const { isPinned, toggle } = usePinToggle();
+  const listRef = useRef<HTMLOListElement | null>(null);
+  const [followLatest, setFollowLatest] = useState(true);
+  const prevCountRef = useRef(0);
 
   const charLookup = useMemo(() => new Map(characters.map((c) => [c.id, c])), [characters]);
 
@@ -50,11 +53,25 @@ export default function DiscussionPage({ params }: { params: Promise<{ gameId: s
     return counts;
   }, [logs]);
 
+  // ログ件数が増えたら下に追従 (フォロー中のみ)
+  useEffect(() => {
+    if (dayLogs.length > prevCountRef.current && followLatest) {
+      listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+    prevCountRef.current = dayLogs.length;
+  }, [dayLogs.length, followLatest]);
+
+  // 議論フェーズ中か (新発言を期待できるか)
+  const isDiscussing = meta?.currentPhase === 'discussion' && meta?.currentDay === selectedDay;
+  const isDiscussionEnded = meta && selectedDay < meta.currentDay; // 過去の日付は議論終了
+  const ownerOfLatestPhase =
+    meta && selectedDay === meta.currentDay && meta.currentPhase !== 'discussion';
+
   return (
     <div className="space-y-section">
       <header className="space-y-card">
         <h1 className="font-serif text-3xl text-brand-gold">議論ログ</h1>
-        <nav className="flex gap-2" aria-label="日付タブ">
+        <nav className="flex flex-wrap items-center gap-2" aria-label="日付タブ">
           {DAYS.map((d) => {
             const count = logCountsByDay[d] ?? 0;
             const disabled = count === 0;
@@ -77,6 +94,15 @@ export default function DiscussionPage({ params }: { params: Promise<{ gameId: s
               </button>
             );
           })}
+          <label className="ml-auto flex cursor-pointer items-center gap-2 text-xs text-brand-muted">
+            <input
+              type="checkbox"
+              checked={followLatest}
+              onChange={(e) => setFollowLatest(e.target.checked)}
+              className="accent-brand-gold"
+            />
+            最新を追従
+          </label>
         </nav>
       </header>
 
@@ -85,37 +111,42 @@ export default function DiscussionPage({ params }: { params: Promise<{ gameId: s
           Day {selectedDay} の議論ログはまだありません。
         </p>
       ) : (
-        <ol className="flex flex-col gap-card">
-          {dayLogs.map((log) => {
-            const speaker = charLookup.get(log.speakerId);
-            const pinned = isPinned('log', log.id);
-            return (
-              <li key={log.id}>
-                <LogBubble
-                  speakerName={speaker?.name ?? log.speakerId}
-                  speakerId={log.speakerId}
-                  text={log.text}
-                  intent={BUBBLE_INTENT[log.intent]}
-                  confidence={log.confidence}
-                  isPinned={pinned}
-                  onPin={() => toggle('log', log.id, log.day)}
-                  timestamp={`turn ${log.turn}`}
-                />
-                {speaker && (
-                  <div className="mt-1 pl-16 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => setProfileChar(speaker)}
-                      className="text-brand-muted underline-offset-2 transition hover:text-brand-gold hover:underline"
-                    >
-                      {speaker.name} のプロフィールを開く →
-                    </button>
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ol>
+        <>
+          <ol ref={listRef} className="flex flex-col gap-card">
+            {dayLogs.map((log) => {
+              const speaker = charLookup.get(log.speakerId);
+              const pinned = isPinned('log', log.id);
+              return (
+                <li key={log.id} className="animate-fade-in">
+                  <LogBubble
+                    speakerName={speaker?.name ?? log.speakerId}
+                    speakerId={log.speakerId}
+                    text={log.text}
+                    intent={BUBBLE_INTENT[log.intent]}
+                    confidence={log.confidence}
+                    isPinned={pinned}
+                    onPin={() => toggle('log', log.id, log.day)}
+                    timestamp={`turn ${log.turn}`}
+                  />
+                  {speaker && (
+                    <div className="mt-1 pl-16 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setProfileChar(speaker)}
+                        className="text-brand-muted underline-offset-2 transition hover:text-brand-gold hover:underline"
+                      >
+                        {speaker.name} のプロフィールを開く →
+                      </button>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+
+          {isDiscussing && <WaitingForNextLog />}
+          {(isDiscussionEnded || ownerOfLatestPhase) && <DiscussionEndedMarker />}
+        </>
       )}
 
       <CharacterProfileModal
@@ -123,6 +154,35 @@ export default function DiscussionPage({ params }: { params: Promise<{ gameId: s
         onClose={() => setProfileChar(null)}
         gameId={gameId}
       />
+    </div>
+  );
+}
+
+function WaitingForNextLog() {
+  return (
+    <div className="flex items-center justify-center gap-2 py-card text-sm text-brand-muted">
+      <span className="inline-flex gap-1">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-gold" />
+        <span
+          className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-gold"
+          style={{ animationDelay: '0.15s' }}
+        />
+        <span
+          className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-gold"
+          style={{ animationDelay: '0.3s' }}
+        />
+      </span>
+      次の発言を待っています…
+    </div>
+  );
+}
+
+function DiscussionEndedMarker() {
+  return (
+    <div className="flex items-center justify-center gap-2 py-card">
+      <span className="h-px flex-1 bg-brand-border" />
+      <Badge tone="neutral">議論終了</Badge>
+      <span className="h-px flex-1 bg-brand-border" />
     </div>
   );
 }

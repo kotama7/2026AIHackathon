@@ -6,11 +6,25 @@ import type {
   EvidencePublic,
   GameId,
   GameMeta,
+  InterrogationAction,
   Pin,
 } from '@village/shared';
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
+
+/** クライアントから見える尋問アクション。truthStatus (内部判定) は除外 */
+export type InterrogationPublic = Omit<InterrogationAction, 'truthStatus'>;
+
+/** プレイヤーが裁判フェーズ用に作成した矛盾候補 (複数ピンの束 + メモ) */
+export type ContradictionDraft = {
+  id: string;
+  /** 関連するピン ID 群 */
+  pinIds: string[];
+  /** プレイヤーのメモ */
+  note: string;
+  createdAtMs: number;
+};
 
 type GameState = {
   gameId: GameId | null;
@@ -19,6 +33,8 @@ type GameState = {
   evidence: EvidencePublic[];
   logs: DialogueLog[];
   pins: Pin[];
+  interrogations: InterrogationPublic[];
+  contradictions: ContradictionDraft[];
 };
 
 type GameActions = {
@@ -32,6 +48,11 @@ type GameActions = {
   setPins: (pins: Pin[]) => void;
   addPin: (pin: Pin) => void;
   removePin: (pinId: string) => void;
+  setInterrogations: (interrogations: InterrogationPublic[]) => void;
+  addInterrogation: (interrogation: InterrogationPublic) => void;
+  setContradictions: (contradictions: ContradictionDraft[]) => void;
+  addContradiction: (contradiction: ContradictionDraft) => void;
+  removeContradiction: (id: string) => void;
   reset: () => void;
 };
 
@@ -44,6 +65,8 @@ const initialState: GameState = {
   evidence: [],
   logs: [],
   pins: [],
+  interrogations: [],
+  contradictions: [],
 };
 
 export const useGameStore = create<Store>()(
@@ -95,6 +118,38 @@ export const useGameStore = create<Store>()(
           'removePin'
         ),
 
+      setInterrogations: (interrogations) => set({ interrogations }, false, 'setInterrogations'),
+      addInterrogation: (intr) =>
+        set(
+          (state) => ({
+            interrogations: state.interrogations.some((i) => i.id === intr.id)
+              ? state.interrogations
+              : [...state.interrogations, intr],
+          }),
+          false,
+          'addInterrogation'
+        ),
+
+      setContradictions: (contradictions) => set({ contradictions }, false, 'setContradictions'),
+      addContradiction: (c) =>
+        set(
+          (state) => ({
+            contradictions: state.contradictions.some((x) => x.id === c.id)
+              ? state.contradictions
+              : [...state.contradictions, c],
+          }),
+          false,
+          'addContradiction'
+        ),
+      removeContradiction: (id) =>
+        set(
+          (state) => ({
+            contradictions: state.contradictions.filter((x) => x.id !== id),
+          }),
+          false,
+          'removeContradiction'
+        ),
+
       reset: () => set({ ...initialState }, false, 'reset'),
     }),
     {
@@ -142,4 +197,18 @@ export function useIsPinned(refType: Pin['refType'], refId: string): boolean {
 /** 特定 day のログのみ取得 */
 export function useDayLogs(day: number): DialogueLog[] {
   return useGameStore(useShallow((state) => state.logs.filter((l) => l.day === day)));
+}
+
+/** 特定キャラ宛の尋問履歴 */
+export function useInterrogationsFor(targetId: string | null): InterrogationPublic[] {
+  return useGameStore(
+    useShallow((state) =>
+      targetId
+        ? state.interrogations
+            .filter((i) => i.targetId === targetId)
+            .slice()
+            .sort((a, b) => a.day - b.day || a.createdAt.toMillis() - b.createdAt.toMillis())
+        : []
+    )
+  );
 }
