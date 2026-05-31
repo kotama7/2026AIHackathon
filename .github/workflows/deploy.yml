@@ -79,17 +79,23 @@ jobs:
             --project "$PROJECT_ID" \
             --non-interactive \
             --force
-      # hosting(SSR): `firebase deploy --only hosting` (full) は SSR 関数の再ビルドで
-      # firebase-frameworks の npm ci lock バグ (sharp 欠落, #9562/#9682) を踏むため使わない。
-      # 代わりにチャンネルへデプロイ (この経路は通る) → live へ clone で昇格 (再ビルドなし)。
-      - name: Deploy hosting to release channel
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_AIHACKATHON_8B383 }}
-          projectId: aihackathon-8b383
-          channelId: release
-          expires: 30d
+      # hosting(SSR): `firebase deploy --only hosting` (full) は SSR 関数再ビルドで
+      # firebase-frameworks の npm ci lock バグ (sharp 欠落, #9562/#9682) を踏む。
+      # action-hosting-deploy は --json 出力が esbuild 警告で汚れて誤判定するため使わない。
+      # 生の hosting:channel:deploy をリトライ付きで実行 → live へ clone 昇格 (再ビルドなし)。
+      - name: Deploy hosting to release channel (retry)
+        run: |
+          n=0
+          until [ $n -ge 3 ]; do
+            n=$((n+1))
+            echo "::group::hosting:channel:deploy attempt $n"
+            if pnpm dlx firebase-tools@15 hosting:channel:deploy release \
+                 --expires 30d --project "$PROJECT_ID" --non-interactive; then
+              echo "::endgroup::"; echo "channel deploy succeeded on attempt $n"; exit 0
+            fi
+            echo "::endgroup::"; echo "attempt $n failed; retrying..."; sleep 15
+          done
+          echo "channel deploy failed after $n attempts"; exit 1
       - name: Promote release channel to live
         run: |
           pnpm dlx firebase-tools@15 hosting:clone \
