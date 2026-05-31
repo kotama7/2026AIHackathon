@@ -6,14 +6,14 @@
     "target": "ES2022",
     "lib": ["ES2022"],
     "outDir": "lib",
-    "rootDir": "src",
-    "noEmit": false,
+    // ビルドは esbuild (esbuild.config.mjs) が担当。tsc は typecheck 専用 (--noEmit)。
+    // rootDir は設定しない: paths 経由で取り込む packages/shared/src が rootDir 外となり
+    // TS6059 になるため。型検査には影響しない。
+    "noEmit": true,
     "declaration": false,
-    "declarationMap": false,
-    "paths": {
-      "@village/shared": ["../packages/shared/src/index.ts"],
-      "@village/shared/*": ["../packages/shared/src/*"]
-    }
+    "declarationMap": false
+    // @village/shared の paths は tsconfig.base.json (baseUrl=repo root) を継承する。
+    // ここで ../packages/... と上書きすると root 基準で 1 つ上を指してしまい解決できない。
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "lib"]

@@ -1,4 +1,12 @@
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { build } from 'esbuild';
+
+// @village/shared は npm が解決できない workspace:* 依存なので package.json から外し、
+// esbuild の alias で src を直接参照して inline 化する (tsc は paths、jest は moduleNameMapper で解決)。
+const here = dirname(fileURLToPath(import.meta.url));
+const sharedEntry = resolve(here, '../packages/shared/src/index.ts');
 
 /**
  * Functions のデプロイ用バンドル。
@@ -17,6 +25,7 @@ await build({
   target: 'node20',
   format: 'esm',
   sourcemap: true,
+  alias: { '@village/shared': sharedEntry },
   // ここに挙げた実 npm パッケージは bundle せず、package.json の dependencies から install。
   // @village/shared は external にしない = inline 化される。
   external: [

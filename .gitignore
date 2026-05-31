@@ -244,6 +244,9 @@ out/
 .firebase/
 .secret.local
 **/.secret.local
+# サービスアカウント秘密鍵 (絶対にコミットしない)
+*-firebase-adminsdk-*.json
+serviceAccount*.json
 firebase-debug.log*
 firestore-debug.log*
 ui-debug.log*
@@ -267,5 +270,5 @@ Thumbs.db
 !**/src/lib/**
 
 
-# Truth Compiler e2e 計測結果 (A2-13)
-functions/test/results/
+# Truth Compiler e2e の生成物 (CSV) のみ無視。.md レポート (P5-02/P5-03) は追跡する。
+functions/test/results/*.csv
