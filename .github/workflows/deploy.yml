@@ -71,10 +71,27 @@ jobs:
         run: |
           echo "$SA_JSON" > "$RUNNER_TEMP/sa.json"
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
-      - name: Deploy hosting + functions
+      # callable Functions (esbuild バンドル済みで確実に通る)
+      - name: Deploy functions
         run: |
           pnpm dlx firebase-tools@15 deploy \
-            --only hosting,functions \
+            --only functions \
             --project "$PROJECT_ID" \
             --non-interactive \
             --force
+      # hosting(SSR): `firebase deploy --only hosting` (full) は SSR 関数の再ビルドで
+      # firebase-frameworks の npm ci lock バグ (sharp 欠落, #9562/#9682) を踏むため使わない。
+      # 代わりにチャンネルへデプロイ (この経路は通る) → live へ clone で昇格 (再ビルドなし)。
+      - name: Deploy hosting to release channel
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_AIHACKATHON_8B383 }}
+          projectId: aihackathon-8b383
+          channelId: release
+          expires: 30d
+      - name: Promote release channel to live
+        run: |
+          pnpm dlx firebase-tools@15 hosting:clone \
+            aihackathon-8b383:release aihackathon-8b383:live \
+            --project "$PROJECT_ID" --non-interactive
