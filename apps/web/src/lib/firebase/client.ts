@@ -20,14 +20,28 @@ import {
 const REGION = 'asia-northeast1';
 const USE_EMULATOR = process.env.NEXT_PUBLIC_USE_EMULATOR === 'true';
 
+// Firebase Web 設定は公開値 (ブラウザに配信される。保護は Firestore rules / App Check)。
+// CI/本番ビルドで NEXT_PUBLIC_* が未設定でも動くよう、aihackathon-8b383 の既定値を
+// フォールバックに持つ。env があればそちらが優先される (emulator / 別プロジェクト用)。
+const DEFAULT_CONFIG = {
+  apiKey: 'AIzaSyCevOxi1ngjsxXRxZ6wcd78ZA_W5Co4lNQ',
+  authDomain: 'aihackathon-8b383.firebaseapp.com',
+  projectId: 'aihackathon-8b383',
+  storageBucket: 'aihackathon-8b383.firebasestorage.app',
+  messagingSenderId: '820514003058',
+  appId: '1:820514003058:web:60c26696dd04e5ef964aeb',
+  measurementId: 'G-3PWRB4JQTY',
+} as const;
+
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? DEFAULT_CONFIG.apiKey,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? DEFAULT_CONFIG.authDomain,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? DEFAULT_CONFIG.projectId,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? DEFAULT_CONFIG.storageBucket,
+  messagingSenderId:
+    process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? DEFAULT_CONFIG.messagingSenderId,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? DEFAULT_CONFIG.appId,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID ?? DEFAULT_CONFIG.measurementId,
 };
 
 let cachedApp: FirebaseApp | undefined;
