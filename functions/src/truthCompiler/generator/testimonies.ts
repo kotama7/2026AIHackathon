@@ -150,33 +150,68 @@ export async function generateTestimonies(
     knownByCharacter.set(c.id, range);
   }
 
-  // id を採番し、knownFactsUsed を話者の知識範囲で交差させる。
-  const testimonies: Testimony[] = result.data.testimonies.map((t, i) => {
-    const range = knownByCharacter.get(t.speakerId) ?? new Set<string>();
-    const knownFactsUsed = t.knownFactsUsed.filter((id) => range.has(id));
-
-    // 嘘の不変条件 (要件 §6.3) をコードで担保する。
-    // ローカルLLM は「嘘」と言いつつ lieReason / contradictedBy を欠くことがあるため、
-    // 条件を満たせない嘘は 'uncertainty' に降格させて最終スキーマ検証を通す。
-    let truthStatus = t.truthStatus;
-    let lieReason = t.lieReason ?? undefined;
-    const contradictedBy = t.contradictedBy;
-    if (truthStatus === 'lie' && (contradictedBy.length === 0 || !lieReason)) {
-      truthStatus = 'uncertainty';
-      lieReason = undefined;
+  // speakerId を char_id へ正規化する。ローカルLLM は speakerId に名前や "char1" 等を
+  // 入れがちで、そのままだと件数照合 (assertTestimonyCounts) が全員 0 件になり再生成ループに陥る。
+  const idSet = new Set(characters.map((c) => c.id));
+  const nameToId = new Map<string, string>();
+  for (const c of characters) {
+    const nm = c.name.trim().toLowerCase();
+    if (nm) nameToId.set(nm, c.id);
+  }
+  const normalizeSpeakerId = (raw: string): string | null => {
+    const s = (raw ?? '').trim();
+    if (!s) return null;
+    if (idSet.has(s)) return s;
+    // "char1" / "char-1" / "Char 1" → char_1
+    const m = s.toLowerCase().match(/char[_\- ]?(\d+)/);
+    if (m) {
+      const cand = `char_${m[1]}`;
+      if (idSet.has(cand)) return cand;
     }
+    // 名前 (完全一致 → 部分一致)
+    const lower = s.toLowerCase();
+    const exact = nameToId.get(lower);
+    if (exact) return exact;
+    for (const c of characters) {
+      const nm = c.name.trim().toLowerCase();
+      if (nm && (lower.includes(nm) || nm.includes(lower))) return c.id;
+    }
+    return null;
+  };
 
-    return {
-      id: `t${i + 1}`,
-      day: t.day,
-      speakerId: t.speakerId,
-      text: t.text,
-      truthStatus,
-      ...(lieReason != null ? { lieReason } : {}),
-      contradictedBy,
-      knownFactsUsed,
-    };
-  });
+  // id を採番し、knownFactsUsed を話者の知識範囲で交差させる。
+  // speakerId を解決できない証言は捨てる (話者に紐づけられないため)。
+  const testimonies: Testimony[] = result.data.testimonies
+    .map((t) => ({ t, speakerId: normalizeSpeakerId(t.speakerId) }))
+    .filter((x): x is { t: (typeof result.data.testimonies)[number]; speakerId: string } => {
+      return x.speakerId !== null;
+    })
+    .map(({ t, speakerId }, i) => {
+      const range = knownByCharacter.get(speakerId) ?? new Set<string>();
+      const knownFactsUsed = t.knownFactsUsed.filter((id) => range.has(id));
+
+      // 嘘の不変条件 (要件 §6.3) をコードで担保する。
+      // ローカルLLM は「嘘」と言いつつ lieReason / contradictedBy を欠くことがあるため、
+      // 条件を満たせない嘘は 'uncertainty' に降格させて最終スキーマ検証を通す。
+      let truthStatus = t.truthStatus;
+      let lieReason = t.lieReason ?? undefined;
+      const contradictedBy = t.contradictedBy;
+      if (truthStatus === 'lie' && (contradictedBy.length === 0 || !lieReason)) {
+        truthStatus = 'uncertainty';
+        lieReason = undefined;
+      }
+
+      return {
+        id: `t${i + 1}`,
+        day: t.day,
+        speakerId,
+        text: t.text,
+        truthStatus,
+        ...(lieReason != null ? { lieReason } : {}),
+        contradictedBy,
+        knownFactsUsed,
+      };
+    });
 
   // 共有スキーマで防御的に再検証 (lie ⇒ lieReason + 非空 contradictedBy を保証)。
   const validated = z.array(schemas.testimonySchema).parse(testimonies);
