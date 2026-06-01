@@ -28,21 +28,88 @@ const MIN_TESTIMONIES_PER_SUSPECT = 2;
  * LLM に出させる lean な 1 証言スキーマ。
  * id は持たない (コードが t{i+1} を注入する)。
  * lie / contradictedBy の整合性は full な testimonySchema 再検証側で担保する。
+ *
+ * ローカルLLM (qwen3:8b 等) は truthStatus に enum 外の値 ('true' 等)、day や
+ * contradictedBy の欠落、testimonies を配列でなく object で返す等のドリフトを起こすため、
+ * ここでは **寛容に受けて決定論的に正規化** する。
  */
+type TruthStatus = 'truth' | 'lie' | 'misunderstanding' | 'omission' | 'uncertainty';
+const ALLOWED_TRUTH_STATUS: readonly TruthStatus[] = [
+  'truth',
+  'lie',
+  'misunderstanding',
+  'omission',
+  'uncertainty',
+];
+const TRUTH_STATUS_SYNONYMS: Record<string, TruthStatus> = {
+  true: 'truth',
+  truthful: 'truth',
+  honest: 'truth',
+  accurate: 'truth',
+  factual: 'truth',
+  correct: 'truth',
+  false: 'lie',
+  lying: 'lie',
+  deception: 'lie',
+  deceptive: 'lie',
+  dishonest: 'lie',
+  fabrication: 'lie',
+  fabricated: 'lie',
+  misunderstood: 'misunderstanding',
+  mistake: 'misunderstanding',
+  mistaken: 'misunderstanding',
+  confusion: 'misunderstanding',
+  omitted: 'omission',
+  omit: 'omission',
+  withheld: 'omission',
+  hiding: 'omission',
+  partial: 'omission',
+  unsure: 'uncertainty',
+  uncertain: 'uncertainty',
+  unknown: 'uncertainty',
+  unclear: 'uncertainty',
+  vague: 'uncertainty',
+};
+
+function coerceTruthStatus(v: unknown): TruthStatus {
+  if (typeof v === 'string') {
+    const k = v.trim().toLowerCase();
+    if (ALLOWED_TRUTH_STATUS.includes(k as TruthStatus)) return k as TruthStatus;
+    if (TRUTH_STATUS_SYNONYMS[k]) return TRUTH_STATUS_SYNONYMS[k]!;
+  }
+  return 'truth';
+}
+
+function clampDay(v: unknown): number {
+  const x = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(x)) return 1;
+  return Math.max(1, Math.min(3, Math.round(x)));
+}
+
+const tolerantStringArray = z.array(z.coerce.string()).catch([]).default([]);
+
 const leanTestimonySchema = z.object({
-  day: z.number().int().min(1).max(3),
-  speakerId: schemas.idSchema,
+  day: z.unknown().transform(clampDay),
+  speakerId: z.coerce.string(),
   text: z.string().min(1),
-  truthStatus: schemas.truthStatusSchema,
+  truthStatus: z.unknown().transform(coerceTruthStatus),
   // LLM は正直な証言で lieReason に null を返すため nullish (null|undefined 許容)。
-  // optional だけだと null を拒否し検証失敗→無駄な再生成を招く。
-  lieReason: z.string().nullish(),
-  contradictedBy: z.array(schemas.idSchema),
-  knownFactsUsed: z.array(z.string()),
+  lieReason: z.coerce.string().nullish().catch(null),
+  contradictedBy: tolerantStringArray,
+  knownFactsUsed: tolerantStringArray,
 });
 
 const testimoniesOutputSchema = z.object({
-  testimonies: z.array(leanTestimonySchema),
+  // qwen3 等は配列でなく {"0":{...},"1":{...}} のような object を返すことがある → 値配列に正規化
+  testimonies: z.preprocess(
+    (v) =>
+      Array.isArray(v)
+        ? v
+        : v && typeof v === 'object'
+          ? Object.values(v as Record<string, unknown>)
+          : v,
+    z.array(leanTestimonySchema)
+  ),
 });
 
 export async function generateTestimonies(
@@ -87,14 +154,26 @@ export async function generateTestimonies(
   const testimonies: Testimony[] = result.data.testimonies.map((t, i) => {
     const range = knownByCharacter.get(t.speakerId) ?? new Set<string>();
     const knownFactsUsed = t.knownFactsUsed.filter((id) => range.has(id));
+
+    // 嘘の不変条件 (要件 §6.3) をコードで担保する。
+    // ローカルLLM は「嘘」と言いつつ lieReason / contradictedBy を欠くことがあるため、
+    // 条件を満たせない嘘は 'uncertainty' に降格させて最終スキーマ検証を通す。
+    let truthStatus = t.truthStatus;
+    let lieReason = t.lieReason ?? undefined;
+    const contradictedBy = t.contradictedBy;
+    if (truthStatus === 'lie' && (contradictedBy.length === 0 || !lieReason)) {
+      truthStatus = 'uncertainty';
+      lieReason = undefined;
+    }
+
     return {
       id: `t${i + 1}`,
       day: t.day,
       speakerId: t.speakerId,
       text: t.text,
-      truthStatus: t.truthStatus,
-      ...(t.lieReason != null ? { lieReason: t.lieReason } : {}),
-      contradictedBy: t.contradictedBy,
+      truthStatus,
+      ...(lieReason != null ? { lieReason } : {}),
+      contradictedBy,
       knownFactsUsed,
     };
   });

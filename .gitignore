@@ -272,3 +272,5 @@ Thumbs.db
 
 # Truth Compiler e2e の生成物 (CSV) のみ無視。.md レポート (P5-02/P5-03) は追跡する。
 functions/test/results/*.csv
+.proxy-token
+cloudrun-llm-proxy/.proxy-token

@@ -27,13 +27,15 @@ import { compileCaseTruth, TruthCompilerError } from '../truthCompiler/index.js'
  * に分割保存する。
  *
  * useSeed=true のときは Truth Compiler を呼ばずデモ用シードゲーム (A1-05 の固定データ) を起動。
- * Truth Compiler は重いため memory 1GiB / timeout 540s。
+ * Truth Compiler は重いため memory 1GiB。
+ * ローカルLLM (Ollama/qwen3:8b) は逐次 7+ 回の生成で ~9-11 分かかるため timeout 900s。
+ * (Gemini なら数十秒。クライアント側 callable のタイムアウトも合わせて延長すること)
  */
 export const startNewGame = onCall<StartNewGameRequest, Promise<StartNewGameResponse>>(
   {
     region: FUNCTIONS_REGION,
     memory: '1GiB',
-    timeoutSeconds: 540,
+    timeoutSeconds: 900,
     secrets: [GEMINI_API_KEY],
   },
   async (request) => {
