@@ -1,12 +1,96 @@
 'use client';
 
-import type { CharacterPublic } from '@village/shared';
+import type { CharacterPublic, GamePhase } from '@village/shared';
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { use as usePromise } from 'react';
 
 import { CharacterProfileModal } from '@/components/game/CharacterProfileModal';
 import { Badge, Card, CardBody, CardHeader, CharacterAvatar } from '@/components/ui';
 import { useGameStore } from '@/stores/gameStore';
+
+/** 進め方ガイド: 目的と1日の流れ、今やるべきことを明示する。 */
+function GuidePanel({ gameId, phase }: { gameId: string; phase: GamePhase | null }) {
+  const steps: { key: string; label: string; href?: string; phases: GamePhase[] }[] = [
+    {
+      key: 'discussion',
+      label: '① 議論ログを読む',
+      href: `/play/${gameId}/discussion`,
+      phases: [],
+    },
+    { key: 'evidence', label: '② 証拠を調べる', href: `/play/${gameId}/evidence`, phases: [] },
+    { key: 'pins', label: '③ 怪しい発言/証拠をピンする', href: `/play/${gameId}/pins`, phases: [] },
+    {
+      key: 'interrogate',
+      label: '④ 尋問で住民を問い詰める',
+      href: `/play/${gameId}/interrogate`,
+      phases: ['investigation'],
+    },
+    {
+      key: 'trial',
+      label: '⑤ 裁判で人狼を告発する',
+      href: `/play/${gameId}/trial`,
+      phases: ['trial'],
+    },
+    {
+      key: 'night',
+      label: '⑥ 夜の結果を確認する',
+      href: `/play/${gameId}/night`,
+      phases: ['night'],
+    },
+  ];
+  return (
+    <Card className="border-brand-gold/40">
+      <CardHeader>
+        <h2 className="font-serif text-lg text-brand-gold">▶ 進め方ガイド</h2>
+      </CardHeader>
+      <CardBody className="space-y-3 text-sm">
+        <p className="text-brand-text">
+          目的: AIキャラの<strong>議論・証拠・証言</strong>から<strong>人狼（嘘をつく者）</strong>
+          を見抜き、裁判で正しく告発する一人用推理ゲームです。
+        </p>
+        <ol className="space-y-1">
+          {steps.map((s) => {
+            const available = s.phases.length === 0 || (phase !== null && s.phases.includes(phase));
+            return (
+              <li key={s.key} className="flex items-center gap-2">
+                {available && s.href ? (
+                  <Link
+                    href={s.href}
+                    className="text-brand-emphasis underline-offset-2 hover:text-brand-gold hover:underline"
+                  >
+                    {s.label}
+                  </Link>
+                ) : (
+                  <span className="text-brand-muted">{s.label}</span>
+                )}
+                {!available && (
+                  <span className="rounded bg-brand-bg px-1.5 py-0.5 text-[10px] text-brand-muted">
+                    {s.phases.map((p) => PHASE_LABEL[p]).join('/')}フェーズで解放
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+        <p className="text-xs text-brand-muted">
+          まずは <strong>①議論</strong> と <strong>②証拠</strong> を読み、気になる点を{' '}
+          <strong>③ピン</strong> して手がかりを整理しましょう。
+        </p>
+      </CardBody>
+    </Card>
+  );
+}
+
+const PHASE_LABEL: Record<GamePhase, string> = {
+  morning: '朝',
+  discussion: '議論',
+  investigation: '調査',
+  organize: '整理',
+  trial: '裁判',
+  night: '夜',
+  result: '終了',
+};
 
 export default function PlayHomePage({ params }: { params: Promise<{ gameId: string }> }) {
   const { gameId } = usePromise(params);
@@ -27,6 +111,7 @@ export default function PlayHomePage({ params }: { params: Promise<{ gameId: str
 
   return (
     <div className="space-y-section">
+      <GuidePanel gameId={gameId} phase={meta?.currentPhase ?? null} />
       <header className="space-y-card">
         <h1 className="font-serif text-4xl text-brand-gold">村の概要</h1>
         {morningLog ? (
