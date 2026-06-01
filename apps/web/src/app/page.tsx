@@ -50,8 +50,10 @@ export default function HomePage() {
         });
         router.push(`/play/${res.gameId}`);
       } catch (e) {
+        // starting は true のまま維持する。StartGameLoader はマウント中のみ
+        // エラー UI (メッセージ + リトライ / シードゲーム) を表示するため、
+        // ここで false にするとエラーが一般ユーザーに見えなくなる。
         setError(e instanceof Error ? e : new Error(String(e)));
-        setStarting(false);
       }
     },
     [reset, setGameId, setMeta, setCharacters, setEvidence, setLogs, router]

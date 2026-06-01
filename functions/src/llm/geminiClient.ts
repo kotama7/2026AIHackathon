@@ -203,6 +203,9 @@ function isRetryable(err: unknown): boolean {
   // ステータスコードでの判定
   const status = extractStatus(err);
   if (status == null) return false;
+  // 429 でも「1日あたり」枠の枯渇は当日回復しないため待っても無駄 → 即失敗させる
+  // (retryDelay を待つと 60s×リトライ分ハングし、最終的にタイムアウトするため)。
+  if (status === 429 && /PerDay|RequestsPerDay/i.test(message)) return false;
   return status === 429 || (status >= 500 && status < 600);
 }
 
