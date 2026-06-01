@@ -1,6 +1,7 @@
 import { FUNCTIONS_REGION } from '@village/shared';
 import { onCall } from 'firebase-functions/v2/https';
 
+export { advancePhase } from './functions/advancePhase.js';
 export { revealTruth } from './functions/revealTruth.js';
 export { startNewGame } from './functions/startNewGame.js';
 export { submitInterrogation } from './functions/submitInterrogation.js';

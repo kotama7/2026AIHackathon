@@ -3,7 +3,7 @@ import type { CharacterId, EvidenceId, GameId, TestimonyId } from '../types/comm
 import type { DeductionStep } from '../types/deduction.js';
 import type { DialogueLog } from '../types/dialogue.js';
 import type { EvidencePublic } from '../types/evidence.js';
-import type { GameDay, GameMeta, GameStatus } from '../types/game.js';
+import type { GameDay, GameMeta, GamePhase, GameStatus } from '../types/game.js';
 import type { QuestionType } from '../types/interrogation.js';
 import type { TrialDecision, Verdict } from '../types/trial.js';
 
@@ -13,6 +13,7 @@ import type { TrialDecision, Verdict } from '../types/trial.js';
 
 export const FUNCTION_NAMES = [
   'startNewGame',
+  'advancePhase',
   'submitInterrogation',
   'advanceToTrial',
   'submitTrialDecision',
@@ -85,6 +86,21 @@ export type SubmitInterrogationResponse = {
   remainingPoints: number;
   /** 信頼度更新後のキャラクター (UI 表示用) */
   updatedCharacter: CharacterPublic;
+};
+
+// =========================================================
+// advancePhase — フェーズ前進オーケストレーション (A3-00)
+// =========================================================
+
+export type AdvancePhaseRequest = {
+  gameId: GameId;
+};
+
+export type AdvancePhaseResponse = {
+  /** 更新後の meta */
+  meta: GameMeta;
+  /** 更新後の現在フェーズ */
+  phase: GamePhase;
 };
 
 // =========================================================
@@ -216,6 +232,7 @@ export type RevealTruthResponse = {
 
 export type FunctionContracts = {
   startNewGame: { req: StartNewGameRequest; res: StartNewGameResponse };
+  advancePhase: { req: AdvancePhaseRequest; res: AdvancePhaseResponse };
   submitInterrogation: {
     req: SubmitInterrogationRequest;
     res: SubmitInterrogationResponse;

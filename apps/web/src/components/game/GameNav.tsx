@@ -2,14 +2,26 @@
 
 import type { GamePhase } from '@village/shared';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { type ReactNode, useMemo } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { type ReactNode, useMemo, useState } from 'react';
 
 import { ModeBadge } from '@/components/game/ModeBadge';
 import { PhaseTransition } from '@/components/game/PhaseTransition';
 import { cn } from '@/components/ui/cn';
 import { useSyncFirestoreToStore } from '@/hooks/useSyncFirestoreToStore';
+import { callAdvancePhase } from '@/lib/firebase/functions';
 import { useGamePhaseInfo, useRemainingPoints } from '@/stores/gameStore';
+
+/** 現フェーズで押せる「次へ進む」導線。slug は前進後に開くタブ。 */
+const NEXT_BY_PHASE: Record<GamePhase, { label: string; slug: string } | null> = {
+  morning: { label: '議論を始める', slug: 'discussion' },
+  discussion: { label: '調査（尋問）へ', slug: 'interrogate' },
+  investigation: { label: '整理へ', slug: 'pins' },
+  organize: { label: '裁判へ', slug: 'trial' },
+  trial: { label: '夜へ', slug: 'night' },
+  night: { label: '次の日へ', slug: '' },
+  result: null,
+};
 
 type Section = {
   slug: string;
@@ -96,10 +108,11 @@ export function GameNav({ gameId, children }: { gameId: string; children: ReactN
           </div>
           <PointsDisplay total={5} remaining={remainingPoints} />
         </div>
-        <nav className="mx-auto flex max-w-board flex-wrap gap-2 px-page pb-card text-sm">
+        <nav className="mx-auto flex max-w-board flex-wrap items-center gap-2 px-page pb-card text-sm">
           {sections.map((s) => (
             <NavLink key={s.slug || 'home'} {...s} />
           ))}
+          {!gameEnded && <AdvanceButton gameId={gameId} phase={phase} />}
         </nav>
       </header>
       <main className="mx-auto w-full max-w-board flex-1 p-page">{children}</main>
@@ -139,6 +152,41 @@ function NavLink({
     <Link href={href} className={classes}>
       {label}
     </Link>
+  );
+}
+
+/** フェーズを前進させる CTA。advancePhase → Firestore 更新 → listener で自動反映 → 該当タブへ。 */
+function AdvanceButton({ gameId, phase }: { gameId: string; phase: GamePhase | null }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  if (!phase) return null;
+  const next = NEXT_BY_PHASE[phase];
+  if (!next) return null;
+
+  const onClick = async () => {
+    setBusy(true);
+    try {
+      await callAdvancePhase({ gameId });
+      router.push(next.slug ? `/play/${gameId}/${next.slug}` : `/play/${gameId}`);
+    } catch {
+      // エラーは makeCallable が console.error 済み。ボタンは再度押せる状態に戻す。
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className={cn(
+        'ml-auto rounded-card border border-brand-gold bg-brand-gold/15 px-card py-1 font-semibold text-brand-gold transition',
+        'hover:bg-brand-gold/25 disabled:cursor-not-allowed disabled:opacity-50'
+      )}
+    >
+      {busy ? '進行中…' : `${next.label} ▶`}
+    </button>
   );
 }
 

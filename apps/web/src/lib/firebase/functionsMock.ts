@@ -1,9 +1,12 @@
 'use client';
 
 import type {
+  AdvancePhaseRequest,
+  AdvancePhaseResponse,
   AdvanceToTrialRequest,
   AdvanceToTrialResponse,
   CharacterPublic,
+  GamePhase,
   DialogueLog,
   EvidencePublic,
   GameMeta,
@@ -188,6 +191,26 @@ function findChar(id: string): CharacterPublic {
 }
 
 /* ===== Mock implementations ===== */
+
+const MOCK_PHASE_ORDER: GamePhase[] = [
+  'morning',
+  'discussion',
+  'investigation',
+  'organize',
+  'trial',
+  'night',
+  'result',
+];
+let mockPhase: GamePhase = 'morning';
+
+export async function mockAdvancePhase(req: AdvancePhaseRequest): Promise<AdvancePhaseResponse> {
+  log('advancePhase', req);
+  await sleep(LATENCY_MS);
+  const i = MOCK_PHASE_ORDER.indexOf(mockPhase);
+  mockPhase = MOCK_PHASE_ORDER[Math.min(i + 1, MOCK_PHASE_ORDER.length - 1)]!;
+  const meta: GameMeta = { ...makeMeta(req.gameId), currentPhase: mockPhase };
+  return { meta, phase: mockPhase };
+}
 
 export async function mockStartNewGame(
   req: StartNewGameRequest,
