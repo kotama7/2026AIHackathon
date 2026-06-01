@@ -1,7 +1,0 @@
-startnewgame	ERROR	Error: [compile] exhausted all cycles
-    at entryFromArgs (/workspace/node_modules/firebase-functions/lib/logger/index.js:144:19)
-    at Object.error (/workspace/node_modules/firebase-functions/lib/logger/index.js:131:11)
-    at compileCaseTruth (file:///workspace/lib/index.js:4743:11)
-    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
-    at async file:///workspace/lib/index.js:4820:22
-    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:545:26
