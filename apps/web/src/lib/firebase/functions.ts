@@ -97,7 +97,16 @@ function makeCallable<N extends FunctionName>(name: N) {
       const result = await fn(req);
       return result.data;
     } catch (err) {
-      throw mapFirebaseError(err);
+      const apiErr = mapFirebaseError(err);
+      // サーバ側エラー (Gemini/Truth Compiler 失敗 = truth_compiler_failure / llm_failure を含む)
+      // を握りつぶさず console に明示する。フォールバック時もここで可視化される。
+      console.error(
+        `[functions:${name}] failed — code=${apiErr.code}` +
+          (apiErr.originalCode ? ` (firebase=${apiErr.originalCode})` : '') +
+          `: ${apiErr.message}`,
+        apiErr.details ?? '',
+      );
+      throw apiErr;
     }
   };
 }
