@@ -1,6 +1,8 @@
 'use client';
 
 import type {
+  AdvancePhaseRequest,
+  AdvancePhaseResponse,
   AdvanceToTrialRequest,
   AdvanceToTrialResponse,
   FunctionContracts,
@@ -116,6 +118,7 @@ function makeCallable<N extends FunctionName>(name: N) {
 // =========================================================
 
 const realStartNewGame = makeCallable('startNewGame');
+const realAdvancePhase = makeCallable('advancePhase');
 const realSubmitInterrogation = makeCallable('submitInterrogation');
 const realAdvanceToTrial = makeCallable('advanceToTrial');
 const realSubmitTrialDecision = makeCallable('submitTrialDecision');
@@ -127,6 +130,13 @@ export async function callStartNewGame(
 ): Promise<StartNewGameResponse> {
   if (USE_MOCK) return mock.mockStartNewGame(req);
   return realStartNewGame(req);
+}
+
+export async function callAdvancePhase(
+  req: AdvancePhaseRequest,
+): Promise<AdvancePhaseResponse> {
+  if (USE_MOCK) return mock.mockAdvancePhase(req);
+  return realAdvancePhase(req);
 }
 
 export async function callSubmitInterrogation(
