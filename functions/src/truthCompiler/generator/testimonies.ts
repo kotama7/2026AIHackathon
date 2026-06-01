@@ -34,7 +34,9 @@ const leanTestimonySchema = z.object({
   speakerId: schemas.idSchema,
   text: z.string().min(1),
   truthStatus: schemas.truthStatusSchema,
-  lieReason: z.string().optional(),
+  // LLM は正直な証言で lieReason に null を返すため nullish (null|undefined 許容)。
+  // optional だけだと null を拒否し検証失敗→無駄な再生成を招く。
+  lieReason: z.string().nullish(),
   contradictedBy: z.array(schemas.idSchema),
   knownFactsUsed: z.array(z.string()),
 });
@@ -91,7 +93,7 @@ export async function generateTestimonies(
       speakerId: t.speakerId,
       text: t.text,
       truthStatus: t.truthStatus,
-      ...(t.lieReason !== undefined ? { lieReason: t.lieReason } : {}),
+      ...(t.lieReason != null ? { lieReason: t.lieReason } : {}),
       contradictedBy: t.contradictedBy,
       knownFactsUsed,
     };

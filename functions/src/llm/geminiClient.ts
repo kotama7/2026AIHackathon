@@ -19,12 +19,20 @@ export const TEMPERATURE = {
   SPEAKER: 0.7,
 } as const;
 
-/** 既定モデル。gemini-2.5-flash は無料枠があり MVP に十分 (1.5-flash は廃止、2.0-flash は無料枠0) */
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+/**
+ * 既定モデル。gemini-2.5-flash-lite は無料枠の RPM が flash より高く、
+ * Truth Compiler の多数の連続呼び出しでもレート上限に当たりにくい。
+ * (1.5-flash は廃止、2.0-flash は無料枠0、2.5-flash は 5 RPM で枯渇しやすい)
+ */
+const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_MAX_RETRIES = 3;
+// 無料枠は per-minute レート制限 (例: 5 RPM)。429 の retryDelay (~16s) を待ち切れるよう
+// リトライ回数を多めに。指数バックオフではなくサーバ指定の retryDelay を優先する。
+const DEFAULT_MAX_RETRIES = 6;
 const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
+/** 429 リトライ待機の上限 (per-minute ウィンドウは 60s 程度で回復) */
+const MAX_RETRY_DELAY_MS = 65_000;
 
 // =============================================================================
 // Client cache
@@ -95,7 +103,7 @@ export type CallGeminiResult = {
 /**
  * Gemini を呼び出して text を返す共通ラッパー。
  *
- * - 429 / 5xx は指数バックオフ (1s, 2s, 4s) で最大 maxRetries 回リトライ
+ * - 429 はサーバ指定 retryDelay を待つ / 5xx は指数バックオフ。最大 maxRetries 回リトライ
  * - timeoutMs 超過で GeminiTimeoutError
  * - JSON 出力モード (jsonMode=true) で responseMimeType を設定し精度向上
  */
@@ -151,7 +159,13 @@ export async function callGemini(opts: CallGeminiOptions): Promise<CallGeminiRes
         logger.error(`[${traceLabel}] non-retryable or exhausted`, { attempt, err: String(err) });
         break;
       }
-      const backoff = 1000 * 2 ** (attempt - 1);
+      // 429 (レート制限) はサーバ指定の retryDelay を優先して待つ。無料枠の per-minute
+      // 制限は指数バックオフ (最大4s) では待ち切れないため。指定が無ければ指数バックオフ。
+      const serverDelay = extractRetryDelayMs(err);
+      const backoff =
+        serverDelay != null
+          ? Math.min(serverDelay + 1000, MAX_RETRY_DELAY_MS)
+          : 1000 * 2 ** (attempt - 1);
       logger.warn(`[${traceLabel}] retry ${attempt} after ${backoff}ms`, { err: String(err) });
       await delay(backoff);
     }
@@ -190,6 +204,24 @@ function isRetryable(err: unknown): boolean {
   const status = extractStatus(err);
   if (status == null) return false;
   return status === 429 || (status >= 500 && status < 600);
+}
+
+/**
+ * 429 エラーからサーバ指定のリトライ待機時間 (ms) を抽出する。
+ * Gemini は本文に RetryInfo (`"retryDelay":"18s"`) と
+ * 文面 (`Please retry in 18.28s`) の両方を含むので両対応。
+ */
+function extractRetryDelayMs(err: unknown): number | undefined {
+  if (!err || typeof err !== 'object') return undefined;
+  const message =
+    typeof (err as { message?: unknown }).message === 'string'
+      ? (err as { message: string }).message
+      : String(err);
+  const retryInfo = message.match(/"retryDelay":\s*"([\d.]+)s"/);
+  if (retryInfo && retryInfo[1]) return Math.ceil(Number(retryInfo[1]) * 1000);
+  const human = message.match(/retry in ([\d.]+)s/i);
+  if (human && human[1]) return Math.ceil(Number(human[1]) * 1000);
+  return undefined;
 }
 
 function extractStatus(err: unknown): number | undefined {
