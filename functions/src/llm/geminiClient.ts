@@ -33,6 +33,72 @@ const DEFAULT_MAX_RETRIES = 6;
 const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
 /** 429 リトライ待機の上限 (per-minute ウィンドウは 60s 程度で回復) */
 const MAX_RETRY_DELAY_MS = 65_000;
+/** 外部(ローカル)LLM のデフォルトタイムアウト。ローカル推論は遅いことがあるため長め */
+const EXTERNAL_TIMEOUT_MS = 120_000;
+
+type ExternalLlm = { baseUrl: string; model?: string; apiKey?: string };
+
+/**
+ * 外部 OpenAI 互換 LLM (Ollama / LM Studio / llama.cpp 等) の設定。
+ * `LLM_BASE_URL` が設定されていればそれを使い、Gemini は使わない。
+ *   LLM_BASE_URL  例: https://<machine>.<tailnet>.ts.net/v1  (Ollama の OpenAI 互換)
+ *   LLM_MODEL     例: llama3.1  (未指定なら呼び出し側の model)
+ *   LLM_API_KEY   任意 (Bearer)。Ollama は通常不要
+ */
+function externalLlmConfig(): ExternalLlm | null {
+  const baseUrl = process.env.LLM_BASE_URL?.trim();
+  if (!baseUrl) return null;
+  const model = process.env.LLM_MODEL?.trim();
+  const apiKey = process.env.LLM_API_KEY?.trim();
+  return {
+    baseUrl: baseUrl.replace(/\/+$/, ''),
+    ...(model ? { model } : {}),
+    ...(apiKey ? { apiKey } : {}),
+  };
+}
+
+/** OpenAI 互換 /chat/completions を叩いてテキストを得る。 */
+async function callOpenAICompatible(args: {
+  baseUrl: string;
+  model: string;
+  apiKey?: string;
+  prompt: string;
+  temperature: number;
+  maxOutputTokens: number;
+  jsonMode: boolean;
+}): Promise<{ text: string; inputTokens?: number; outputTokens?: number }> {
+  const res = await fetch(`${args.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(args.apiKey ? { authorization: `Bearer ${args.apiKey}` } : {}),
+    },
+    body: JSON.stringify({
+      model: args.model,
+      messages: [{ role: 'user', content: args.prompt }],
+      temperature: args.temperature,
+      max_tokens: args.maxOutputTokens,
+      stream: false,
+      ...(args.jsonMode ? { response_format: { type: 'json_object' } } : {}),
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    const e = new Error(`[LLM ${res.status}] ${body.slice(0, 300)}`) as Error & { status?: number };
+    e.status = res.status;
+    throw e;
+  }
+  const data = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+  const text = data.choices?.[0]?.message?.content ?? '';
+  const out: { text: string; inputTokens?: number; outputTokens?: number } = { text };
+  if (typeof data.usage?.prompt_tokens === 'number') out.inputTokens = data.usage.prompt_tokens;
+  if (typeof data.usage?.completion_tokens === 'number')
+    out.outputTokens = data.usage.completion_tokens;
+  return out;
+}
 
 // =============================================================================
 // Client cache
@@ -122,34 +188,63 @@ export async function callGemini(opts: CallGeminiOptions): Promise<CallGeminiRes
   // 多層防御: 1 日あたりリクエスト上限 (LLM_DAILY_REQUEST_LIMIT 未設定なら no-op)
   await enforceDailyLlmQuota();
 
-  const client = getClient();
-  const model: GenerativeModel = client.getGenerativeModel({
-    model: modelName,
-    generationConfig: {
-      temperature,
-      maxOutputTokens,
-      ...(jsonMode ? { responseMimeType: 'application/json' } : {}),
-    },
-  });
+  // 外部 (ローカル) LLM が設定されていれば Gemini の代わりにそれを使う。
+  // その場合 Gemini クライアント (GEMINI_API_KEY) は初期化しない。
+  const external = externalLlmConfig();
+  const model: GenerativeModel | null = external
+    ? null
+    : getClient().getGenerativeModel({
+        model: modelName,
+        generationConfig: {
+          temperature,
+          maxOutputTokens,
+          ...(jsonMode ? { responseMimeType: 'application/json' } : {}),
+        },
+      });
+  // ローカル LLM はネットワーク/推論が遅いことがあるので timeout を延長 (明示指定が無い場合)
+  const effectiveTimeout =
+    external && timeoutMs === DEFAULT_TIMEOUT_MS ? EXTERNAL_TIMEOUT_MS : timeoutMs;
 
   const startedAt = Date.now();
   let lastErr: unknown;
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
-      const text = await withTimeout(
-        model.generateContent(prompt).then((r) => r.response.text()),
-        timeoutMs
-      );
-      const usage = await tryGetUsage(model, prompt);
+      const gen = external
+        ? await withTimeout(
+            callOpenAICompatible({
+              baseUrl: external.baseUrl,
+              model: external.model ?? modelName,
+              ...(external.apiKey ? { apiKey: external.apiKey } : {}),
+              prompt,
+              temperature,
+              maxOutputTokens,
+              jsonMode,
+            }),
+            effectiveTimeout
+          )
+        : await withTimeout(
+            model!.generateContent(prompt).then(async (r) => ({
+              text: r.response.text(),
+              ...(await tryGetUsage(model!, prompt)),
+            })),
+            effectiveTimeout
+          );
       const durationMs = Date.now() - startedAt;
       logger.info(`[${traceLabel}] success`, {
         attempt,
         durationMs,
-        inputTokens: usage.inputTokens,
-        outputTokens: usage.outputTokens,
+        provider: external ? 'openai-compatible' : 'gemini',
+        inputTokens: gen.inputTokens,
+        outputTokens: gen.outputTokens,
       });
-      return { text, ...usage, durationMs, attempts: attempt };
+      return {
+        text: gen.text,
+        ...(gen.inputTokens !== undefined ? { inputTokens: gen.inputTokens } : {}),
+        ...(gen.outputTokens !== undefined ? { outputTokens: gen.outputTokens } : {}),
+        durationMs,
+        attempts: attempt,
+      };
     } catch (err) {
       lastErr = err;
       if (err instanceof GeminiTimeoutError) {
