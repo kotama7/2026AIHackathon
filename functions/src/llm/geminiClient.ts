@@ -33,8 +33,12 @@ const DEFAULT_MAX_RETRIES = 6;
 const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
 /** 429 リトライ待機の上限 (per-minute ウィンドウは 60s 程度で回復) */
 const MAX_RETRY_DELAY_MS = 65_000;
-/** 外部(ローカル)LLM のデフォルトタイムアウト。ローカル推論は遅いことがあるため長め */
-const EXTERNAL_TIMEOUT_MS = 120_000;
+/**
+ * 外部(ローカル)LLM のデフォルトタイムアウト。
+ * 30 tok/s 級のローカル推論では重い生成 (testimonies 等, 数千トークン) が 120s を超えうるため
+ * 余裕を持って 300s。※ Ollama は直列処理なので同時実行は禁物 (輻輳で各呼び出しが遅延する)。
+ */
+const EXTERNAL_TIMEOUT_MS = 300_000;
 
 type ExternalLlm = { baseUrl: string; model?: string; apiKey?: string };
 
