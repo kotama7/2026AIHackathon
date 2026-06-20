@@ -17,7 +17,7 @@ import type {
   SubmitTrialDecisionRequest,
   SubmitTrialDecisionResponse,
 } from '@village/shared';
-import { httpsCallable } from 'firebase/functions';
+import { type HttpsCallableOptions, httpsCallable } from 'firebase/functions';
 
 import { getFunctions } from './client';
 import * as mock from './functionsMock';
@@ -84,8 +84,22 @@ function mapFirebaseError(err: unknown): FunctionsApiError {
   );
 }
 
+/**
+ * callable のクライアント側タイムアウト (ms)。
+ * SDK 既定は 70s だが、LLM を伴う処理 (議論/尋問/弁明生成) は超えうるため伸ばす。
+ */
+const DEFAULT_CALLABLE_TIMEOUT_MS = 180_000;
+/**
+ * startNewGame は Truth Compiler (Gemini を 6+ 回逐次呼び) で 1-2 分かかる。
+ * サーバ側 timeoutSeconds=540 に合わせ、既定 70s での早期切断を防ぐ。
+ */
+const START_NEW_GAME_TIMEOUT_MS = 540_000;
+
 /** 型付き callable を作る低レベルヘルパー */
-function makeCallable<N extends FunctionName>(name: N) {
+function makeCallable<N extends FunctionName>(
+  name: N,
+  options: HttpsCallableOptions = { timeout: DEFAULT_CALLABLE_TIMEOUT_MS },
+) {
   return async (
     req: FunctionContracts[N]['req'],
   ): Promise<FunctionContracts[N]['res']> => {
@@ -93,7 +107,7 @@ function makeCallable<N extends FunctionName>(name: N) {
       const fn = httpsCallable<
         FunctionContracts[N]['req'],
         FunctionContracts[N]['res']
-      >(getFunctions(), name);
+      >(getFunctions(), name, options);
       const result = await fn(req);
       return result.data;
     } catch (err) {
@@ -106,7 +120,9 @@ function makeCallable<N extends FunctionName>(name: N) {
 // Wrapper 関数 (real / mock 自動切替)
 // =========================================================
 
-const realStartNewGame = makeCallable('startNewGame');
+const realStartNewGame = makeCallable('startNewGame', {
+  timeout: START_NEW_GAME_TIMEOUT_MS,
+});
 const realSubmitInterrogation = makeCallable('submitInterrogation');
 const realAdvanceToTrial = makeCallable('advanceToTrial');
 const realSubmitTrialDecision = makeCallable('submitTrialDecision');
