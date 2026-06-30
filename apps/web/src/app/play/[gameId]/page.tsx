@@ -104,6 +104,8 @@ export default function PlayHomePage({ params }: { params: Promise<{ gameId: str
     () => logs.find((l) => l.phase === 'morning' && l.day === (meta?.currentDay ?? 1)),
     [logs, meta?.currentDay]
   );
+  // 事件導入ブリーフィング (startNewGame で生成)。無ければ morning ログにフォールバック。
+  const incidentText = meta?.incidentBriefing ?? morningLog?.text ?? null;
 
   if (characters.length === 0) {
     return <EmptyState gameId={gameId} />;
@@ -114,16 +116,14 @@ export default function PlayHomePage({ params }: { params: Promise<{ gameId: str
       <GuidePanel gameId={gameId} phase={meta?.currentPhase ?? null} />
       <header className="space-y-card">
         <h1 className="font-serif text-4xl text-brand-gold">村の概要</h1>
-        {morningLog ? (
+        {incidentText ? (
           <Card>
             <CardHeader className="flex items-center justify-between">
               <h2 className="font-serif text-lg text-brand-emphasis">事件概要</h2>
-              <Badge tone="danger">Day {morningLog.day}</Badge>
+              <Badge tone="danger">Day {meta?.currentDay ?? morningLog?.day ?? 1}</Badge>
             </CardHeader>
             <CardBody>
-              <p className="whitespace-pre-wrap leading-relaxed text-brand-text">
-                {morningLog.text}
-              </p>
+              <p className="whitespace-pre-wrap leading-relaxed text-brand-text">{incidentText}</p>
             </CardBody>
           </Card>
         ) : (

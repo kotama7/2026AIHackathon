@@ -1,4 +1,8 @@
-import { type GenerativeModel, GoogleGenerativeAI } from '@google/generative-ai';
+import {
+  type GenerationConfig,
+  type GenerativeModel,
+  GoogleGenerativeAI,
+} from '@google/generative-ai';
 import { logger } from 'firebase-functions/v2';
 
 import { GeminiConfigError, GeminiRetryExhaustedError, GeminiTimeoutError } from './errors.js';
@@ -24,15 +28,92 @@ export const TEMPERATURE = {
  * Truth Compiler の多数の連続呼び出しでもレート上限に当たりにくい。
  * (1.5-flash は廃止、2.0-flash は無料枠0、2.5-flash は 5 RPM で枯渇しやすい)
  */
-const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
+// flash-lite は無料枠 RPM が高い反面、現状「503 high demand」(容量逼迫) が頻発し
+// リトライ遅延で関数がタイムアウトしていた。flash は 503 が出ず (実測)、各呼び出しが
+// 10〜38s かかるため自然に低レートになり 429 にも当たりにくい。thinkingBudget=0 と
+// 併用して採用する。
+const DEFAULT_MODEL = 'gemini-2.5-flash';
 
-const DEFAULT_TIMEOUT_MS = 30_000;
+// 混雑時 (503 high demand) の Gemini は単発応答が 30s を超えることがあり、タイムアウトは
+// リトライされない設計のため 30s だと repair/重い生成が誤って失敗→regen を誘発していた。
+// 余裕を持たせて spurious timeout を減らす。
+const DEFAULT_TIMEOUT_MS = 60_000;
 // 無料枠は per-minute レート制限 (例: 5 RPM)。429 の retryDelay (~16s) を待ち切れるよう
 // リトライ回数を多めに。指数バックオフではなくサーバ指定の retryDelay を優先する。
 const DEFAULT_MAX_RETRIES = 6;
 const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
 /** 429 リトライ待機の上限 (per-minute ウィンドウは 60s 程度で回復) */
 const MAX_RETRY_DELAY_MS = 65_000;
+/**
+ * 外部(ローカル)LLM のデフォルトタイムアウト。
+ * 30 tok/s 級のローカル推論では重い生成 (testimonies 等, 数千トークン) が 120s を超えうるため
+ * 余裕を持って 300s。※ Ollama は直列処理なので同時実行は禁物 (輻輳で各呼び出しが遅延する)。
+ */
+const EXTERNAL_TIMEOUT_MS = 300_000;
+
+type ExternalLlm = { baseUrl: string; model?: string; apiKey?: string };
+
+/**
+ * 外部 OpenAI 互換 LLM (Ollama / LM Studio / llama.cpp 等) の設定。
+ * `LLM_BASE_URL` が設定されていればそれを使い、Gemini は使わない。
+ *   LLM_BASE_URL  例: https://<machine>.<tailnet>.ts.net/v1  (Ollama の OpenAI 互換)
+ *   LLM_MODEL     例: llama3.1  (未指定なら呼び出し側の model)
+ *   LLM_API_KEY   任意 (Bearer)。Ollama は通常不要
+ */
+function externalLlmConfig(): ExternalLlm | null {
+  const baseUrl = process.env.LLM_BASE_URL?.trim();
+  if (!baseUrl) return null;
+  const model = process.env.LLM_MODEL?.trim();
+  const apiKey = process.env.LLM_API_KEY?.trim();
+  return {
+    baseUrl: baseUrl.replace(/\/+$/, ''),
+    ...(model ? { model } : {}),
+    ...(apiKey ? { apiKey } : {}),
+  };
+}
+
+/** OpenAI 互換 /chat/completions を叩いてテキストを得る。 */
+async function callOpenAICompatible(args: {
+  baseUrl: string;
+  model: string;
+  apiKey?: string;
+  prompt: string;
+  temperature: number;
+  maxOutputTokens: number;
+  jsonMode: boolean;
+}): Promise<{ text: string; inputTokens?: number; outputTokens?: number }> {
+  const res = await fetch(`${args.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(args.apiKey ? { authorization: `Bearer ${args.apiKey}` } : {}),
+    },
+    body: JSON.stringify({
+      model: args.model,
+      messages: [{ role: 'user', content: args.prompt }],
+      temperature: args.temperature,
+      max_tokens: args.maxOutputTokens,
+      stream: false,
+      ...(args.jsonMode ? { response_format: { type: 'json_object' } } : {}),
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    const e = new Error(`[LLM ${res.status}] ${body.slice(0, 300)}`) as Error & { status?: number };
+    e.status = res.status;
+    throw e;
+  }
+  const data = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+  const text = data.choices?.[0]?.message?.content ?? '';
+  const out: { text: string; inputTokens?: number; outputTokens?: number } = { text };
+  if (typeof data.usage?.prompt_tokens === 'number') out.inputTokens = data.usage.prompt_tokens;
+  if (typeof data.usage?.completion_tokens === 'number')
+    out.outputTokens = data.usage.completion_tokens;
+  return out;
+}
 
 // =============================================================================
 // Client cache
@@ -122,34 +203,69 @@ export async function callGemini(opts: CallGeminiOptions): Promise<CallGeminiRes
   // 多層防御: 1 日あたりリクエスト上限 (LLM_DAILY_REQUEST_LIMIT 未設定なら no-op)
   await enforceDailyLlmQuota();
 
-  const client = getClient();
-  const model: GenerativeModel = client.getGenerativeModel({
-    model: modelName,
-    generationConfig: {
-      temperature,
-      maxOutputTokens,
-      ...(jsonMode ? { responseMimeType: 'application/json' } : {}),
-    },
-  });
+  // 外部 (ローカル) LLM が設定されていれば Gemini の代わりにそれを使う。
+  // その場合 Gemini クライアント (GEMINI_API_KEY) は初期化しない。
+  const external = externalLlmConfig();
+  const model: GenerativeModel | null = external
+    ? null
+    : getClient().getGenerativeModel({
+        model: modelName,
+        // gemini-2.5-flash は既定で「思考(thinking)」が有効で、内部推論が出力トークン枠を
+        // 消費する。そのため小さめの maxOutputTokens では JSON 出力が途中で切れ
+        // ("Unterminated string")、構造化生成が失敗する。thinkingBudget=0 で思考を無効化し
+        // 全枠を JSON 出力に充てる。SDK 0.21 の型に thinkingConfig は無いが、SDK は
+        // generationConfig を JSON.stringify でそのまま送るため API には届く (実測確認済み)。
+        generationConfig: {
+          temperature,
+          maxOutputTokens,
+          ...(jsonMode ? { responseMimeType: 'application/json' } : {}),
+          ...(/gemini-2\.5/.test(modelName) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+        } as GenerationConfig,
+      });
+  // ローカル LLM はネットワーク/推論が遅いことがあるので timeout を延長 (明示指定が無い場合)
+  const effectiveTimeout =
+    external && timeoutMs === DEFAULT_TIMEOUT_MS ? EXTERNAL_TIMEOUT_MS : timeoutMs;
 
   const startedAt = Date.now();
   let lastErr: unknown;
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
-      const text = await withTimeout(
-        model.generateContent(prompt).then((r) => r.response.text()),
-        timeoutMs
-      );
-      const usage = await tryGetUsage(model, prompt);
+      const gen = external
+        ? await withTimeout(
+            callOpenAICompatible({
+              baseUrl: external.baseUrl,
+              model: external.model ?? modelName,
+              ...(external.apiKey ? { apiKey: external.apiKey } : {}),
+              prompt,
+              temperature,
+              maxOutputTokens,
+              jsonMode,
+            }),
+            effectiveTimeout
+          )
+        : await withTimeout(
+            model!.generateContent(prompt).then(async (r) => ({
+              text: r.response.text(),
+              ...(await tryGetUsage(model!, prompt)),
+            })),
+            effectiveTimeout
+          );
       const durationMs = Date.now() - startedAt;
       logger.info(`[${traceLabel}] success`, {
         attempt,
         durationMs,
-        inputTokens: usage.inputTokens,
-        outputTokens: usage.outputTokens,
+        provider: external ? 'openai-compatible' : 'gemini',
+        inputTokens: gen.inputTokens,
+        outputTokens: gen.outputTokens,
       });
-      return { text, ...usage, durationMs, attempts: attempt };
+      return {
+        text: gen.text,
+        ...(gen.inputTokens !== undefined ? { inputTokens: gen.inputTokens } : {}),
+        ...(gen.outputTokens !== undefined ? { outputTokens: gen.outputTokens } : {}),
+        durationMs,
+        attempts: attempt,
+      };
     } catch (err) {
       lastErr = err;
       if (err instanceof GeminiTimeoutError) {

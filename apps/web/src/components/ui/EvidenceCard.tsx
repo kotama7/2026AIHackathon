@@ -1,3 +1,5 @@
+import { useGameStore } from '@/stores/gameStore';
+
 import { Badge } from './Badge';
 import { Button } from './Button';
 import { Card, CardBody, CardFooter, CardHeader } from './Card';
@@ -24,6 +26,9 @@ const RELIABILITY_TONE = {
 } as const;
 
 export function EvidenceCard({ evidence, onPin, onPresent, isPinned }: EvidenceCardProps) {
+  const characters = useGameStore((s) => s.characters);
+  // relatedCharacters は char_N の内部ID。プレイヤーには名前で見せる。
+  const nameFor = (id: string): string => characters.find((c) => c.id === id)?.name ?? id;
   return (
     <Card>
       <CardHeader className="flex items-start justify-between gap-2">
@@ -38,7 +43,7 @@ export function EvidenceCard({ evidence, onPin, onPresent, isPinned }: EvidenceC
           <div className="flex flex-wrap gap-1">
             {evidence.relatedCharacters.map((char) => (
               <Badge key={char} tone="neutral">
-                関連: {char}
+                関連: {nameFor(char)}
               </Badge>
             ))}
           </div>

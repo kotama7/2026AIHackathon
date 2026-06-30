@@ -38,7 +38,7 @@ export function buildCaseSkeletonPrompt(args: BuildCaseSkeletonPromptArgs): stri
 - 人狼はちょうど 1 人。容疑者 ID から選ぶ。
 - レッドヘリング村人を 1 人選ぶ (人狼とは別人)。「人狼ではないが怪しく見える」合理的理由を必ず持たせる。
 - 襲撃時刻は 23:00〜01:00 の "HH:MM" 形式。
-- 場所は 6〜8 個。各場所に id (snake_case の英字) と日本語表示名を付ける。
+- 場所は 6〜8 個。各場所の id は**日本語の場所名**にする (例: "川辺の小屋", "古い水車小屋", "村の広場")。英語やローマ字 (snake_case) の id は禁止。
 - 場所の隣接関係 (adjacency) を定義する。移動は隣接した場所間でのみ可能とする。
 - 襲撃場所は定義した場所のいずれか。
 - 難易度: ${difficulty} — ${DIFFICULTY_NOTE[difficulty]}
@@ -50,16 +50,16 @@ ${diversitySeed ? `- 多様化シード: "${diversitySeed}"。過去の生成例
   "werewolfId": "char_X",
   "victimId": "${victimId}",
   "attackTime": "00:10",
-  "attackLocation": "<場所id>",
-  "attackRoute": "人狼が襲撃場所へ向かった動線の説明 (どの場所を経由したか)",
-  "primaryEvidenceTypes": ["door_log", "footprint", "torn_note", ...],
+  "attackLocation": "<日本語の場所名>",
+  "attackRoute": "人狼が襲撃場所へ向かった動線の説明 (どの場所を経由したか・日本語)",
+  "primaryEvidenceTypes": ["出入りの記録", "足跡", "破れた手紙", ...],
   "redHerringCharacterId": "char_Y",
   "redHerringReason": "そのレッドヘリング村人が怪しく見える具体的理由 (事件とは無関係な別の秘密で説明できること)",
   "solutionLogic": "プレイヤーが人狼に到達する推理の概要 (自然言語、2〜4 文)",
   "locationGraph": {
-    "locations": ["<場所id>", ...],
-    "adjacency": { "<場所id>": ["<隣接場所id>", ...], ... },
-    "displayNames": { "<場所id>": "<日本語表示名>", ... }
+    "locations": ["<日本語の場所名>", ...],
+    "adjacency": { "<日本語の場所名>": ["<隣接する日本語の場所名>", ...], ... },
+    "displayNames": { "<日本語の場所名>": "<同じ日本語の場所名>", ... }
   }
 }
 
@@ -68,5 +68,6 @@ ${diversitySeed ? `- 多様化シード: "${diversitySeed}"。過去の生成例
 - attackLocation は locations に含める。
 - adjacency / displayNames のキーは locations と完全一致させる。
 - adjacency は対称 (A が B に隣接するなら B も A に隣接) にする。
-- レッドヘリングの理由は「人狼にするため」ではなく、別の人間的な事情 (密会・借金・過去の確執など) にする。`;
+- レッドヘリングの理由は「人狼にするため」ではなく、別の人間的な事情 (密会・借金・過去の確執など) にする。
+- **プレイヤーに見える文字列 (場所名・証拠タイプ・各説明文) はすべて日本語で書く。英語の id やローマ字 (snake_case) を一切出力しない。**`;
 }

@@ -93,12 +93,16 @@ function buildWatchResult(
   timeline: TimelineEvent[],
   caseTruth: CaseTruth
 ): string {
+  // 監視結果はプレイヤーが読むテキストなので内部ID (char_N) でなく名前で表示する。
+  const targetName =
+    caseTruth.characters.find((c) => c.id === watchTargetId)?.name ?? watchTargetId;
+
   const events = timeline
     .filter((e) => e.character === watchTargetId)
     .sort((a, b) => a.time.localeCompare(b.time));
 
   if (events.length === 0) {
-    return `${watchTargetId} は夜の間、特に不審な動きを見せなかった。あなたの監視からは何も得られなかった。`;
+    return `${targetName} は夜の間、特に不審な動きを見せなかった。あなたの監視からは何も得られなかった。`;
   }
 
   const isWerewolf = watchTargetId === caseTruth.summary.werewolfId;
@@ -107,12 +111,12 @@ function buildWatchResult(
   const eventLines = events.map((e) => `  - ${e.time} @ ${e.location}: ${e.action}`).join('\n');
 
   if (isWerewolf) {
-    return `あなたは ${watchTargetId} を一晩中監視していた。\n以下の動きが観察された:\n${eventLines}\n\n— この一連の行動には不自然な点が多く、決定的な手がかりとなり得る。`;
+    return `あなたは ${targetName} を一晩中監視していた。\n以下の動きが観察された:\n${eventLines}\n\n— この一連の行動には不自然な点が多く、決定的な手がかりとなり得る。`;
   }
   if (isVictim) {
-    return `あなたは ${watchTargetId} を監視していたが、夜半に被害者となった。\n最後に観察された動き:\n${eventLines}`;
+    return `あなたは ${targetName} を監視していたが、夜半に被害者となった。\n最後に観察された動き:\n${eventLines}`;
   }
-  return `あなたは ${watchTargetId} を監視した。観察された動き:\n${eventLines}\n\n— 特に決定的な手がかりは得られなかった。`;
+  return `あなたは ${targetName} を監視した。観察された動き:\n${eventLines}\n\n— 特に決定的な手がかりは得られなかった。`;
 }
 
 function toEvidencePublic(e: EvidencePublic): EvidencePublic {

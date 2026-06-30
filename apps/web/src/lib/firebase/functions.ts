@@ -86,8 +86,12 @@ function mapFirebaseError(err: unknown): FunctionsApiError {
   );
 }
 
-/** 型付き callable を作る低レベルヘルパー */
-function makeCallable<N extends FunctionName>(name: N) {
+/**
+ * 型付き callable を作る低レベルヘルパー。
+ * timeoutMs を渡すと httpsCallable の既定 (70s) を上書きする。
+ * Truth Compiler はローカルLLMで ~9-11 分かかるため startNewGame だけ大きく取る。
+ */
+function makeCallable<N extends FunctionName>(name: N, timeoutMs?: number) {
   return async (
     req: FunctionContracts[N]['req'],
   ): Promise<FunctionContracts[N]['res']> => {
@@ -95,7 +99,7 @@ function makeCallable<N extends FunctionName>(name: N) {
       const fn = httpsCallable<
         FunctionContracts[N]['req'],
         FunctionContracts[N]['res']
-      >(getFunctions(), name);
+      >(getFunctions(), name, timeoutMs ? { timeout: timeoutMs } : undefined);
       const result = await fn(req);
       return result.data;
     } catch (err) {
@@ -117,7 +121,8 @@ function makeCallable<N extends FunctionName>(name: N) {
 // Wrapper 関数 (real / mock 自動切替)
 // =========================================================
 
-const realStartNewGame = makeCallable('startNewGame');
+// ローカルLLM (Ollama) の Truth Compiler は最大 ~15 分。関数側 timeout(900s) に合わせる。
+const realStartNewGame = makeCallable('startNewGame', 900_000);
 const realAdvancePhase = makeCallable('advancePhase');
 const realSubmitInterrogation = makeCallable('submitInterrogation');
 const realAdvanceToTrial = makeCallable('advanceToTrial');

@@ -58,6 +58,7 @@ export default function TruthPage({ params }: { params: Promise<{ gameId: string
 
       <PlayerComparison
         truthReveal={truthReveal}
+        characters={characters}
         lastTrial={
           lastTrial
             ? {
@@ -97,9 +98,11 @@ export default function TruthPage({ params }: { params: Promise<{ gameId: string
 
 function PlayerComparison({
   truthReveal,
+  characters,
   lastTrial,
 }: {
   truthReveal: RevealTruthResponse;
+  characters: CharacterPublic[];
   lastTrial: {
     suspectId: string;
     presentedEvidence: EvidenceId[];
@@ -145,7 +148,10 @@ function PlayerComparison({
             {lastTrial.suspectId === truthReveal.werewolf.id ? (
               <span className="text-brand-success">{truthReveal.werewolf.name} (正解)</span>
             ) : (
-              <span className="text-brand-danger">{lastTrial.suspectId} (誤り)</span>
+              <span className="text-brand-danger">
+                {characters.find((c) => c.id === lastTrial.suspectId)?.name ?? lastTrial.suspectId}{' '}
+                (誤り)
+              </span>
             )}
           </span>
         </Row>

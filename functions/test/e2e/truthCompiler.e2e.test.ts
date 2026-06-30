@@ -16,7 +16,7 @@ import { describe, expect, it } from '@jest/globals';
 
 import { compileCaseTruth, TruthCompilerError } from '../../src/truthCompiler/index.js';
 
-const RUNS = 10;
+const RUNS = Number(process.env.E2E_RUNS ?? 10);
 const SUCCESS_RATE_THRESHOLD = 0.7; // 目標 0.8
 const AVG_DURATION_MS_THRESHOLD = 60_000;
 
@@ -45,7 +45,7 @@ maybe('Truth Compiler e2e (real Gemini)', () => {
         try {
           const { metrics } = await compileCaseTruth(
             { caseId: `e2e_${i}`, diversitySeed: `e2e-run-${i}` },
-            { useLlm: false }
+            { useLlm: false, ...(process.env.E2E_MODEL ? { model: process.env.E2E_MODEL } : {}) }
           );
           const tokens = metrics.stages.reduce(
             (acc, s) => ({
@@ -95,7 +95,7 @@ maybe('Truth Compiler e2e (real Gemini)', () => {
       expect(successRate).toBeGreaterThanOrEqual(SUCCESS_RATE_THRESHOLD);
       expect(avgDuration).toBeLessThanOrEqual(AVG_DURATION_MS_THRESHOLD);
     },
-    RUNS * AVG_DURATION_MS_THRESHOLD + 60_000
+    RUNS * 360_000 + 60_000
   );
 });
 

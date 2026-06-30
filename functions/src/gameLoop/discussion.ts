@@ -14,6 +14,7 @@ import { TEMPERATURE } from '../llm/geminiClient.js';
 import { buildDiscussionPrompt } from '../llm/prompts/speaker/discussion.js';
 import { generateStructured } from '../llm/validateAndRetry.js';
 import { enforceKnowledgeScope } from './knowledgeScope.js';
+import { buildNameById, replaceIdsWithNames } from './nameSanitize.js';
 
 export type GenerateDailyDiscussionArgs = {
   uid: UserId;
@@ -42,6 +43,10 @@ export async function generateDailyDiscussion(
   const aliveSpeakers = characters.filter((c) => c.isAlive);
   if (aliveSpeakers.length === 0) return [];
 
+  // 全登場人物の id→名前 対応。発言本文に内部ID (char_N) が漏れた場合に名前へ置換する保険。
+  const roster = characters.map((c) => ({ id: c.id, name: c.name }));
+  const nameById = buildNameById(characters);
+
   const accumulated: DialogueLog[] = [...priorLogs];
   const generated: DialogueLog[] = [];
 
@@ -53,6 +58,8 @@ export async function generateDailyDiscussion(
           return await generateOneUtterance({
             speaker,
             priorLogs: accumulated,
+            roster,
+            nameById,
             goal:
               t === 0
                 ? '事件についての第一印象や疑念を述べる'
@@ -110,9 +117,16 @@ export async function generateDailyDiscussion(
 async function generateOneUtterance(args: {
   speaker: Character;
   priorLogs: DialogueLog[];
+  roster: Array<{ id: string; name: string }>;
+  nameById: Map<string, string>;
   goal: string;
 }): Promise<{ output: DialogueOutput }> {
-  const prompt = buildDiscussionPrompt(args);
+  const prompt = buildDiscussionPrompt({
+    speaker: args.speaker,
+    priorLogs: args.priorLogs,
+    goal: args.goal,
+    roster: args.roster,
+  });
   const { data } = await generateStructured({
     schema: dialogueOutputSchema,
     prompt,
@@ -131,5 +145,10 @@ async function generateOneUtterance(args: {
     // MVP: 違反時も発言は採用しつつログに残す。完全 retry は重いので validateAndRetry の中だけ。
   }
 
-  return { output: data };
+  // 発言本文に内部ID (char_N / victim_N) が漏れていたら名前へ置換する (保険)。
+  const sanitized: DialogueOutput = {
+    ...data,
+    utterance: replaceIdsWithNames(data.utterance, args.nameById),
+  };
+  return { output: sanitized };
 }

@@ -14,6 +14,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { internalDb, nowTimestamp, userDb } from '../db/admin.js';
 import { generateInterrogationAnswer } from '../gameLoop/interrogation.js';
 import { consumePoints } from '../gameLoop/interrogationPoints.js';
+import { buildNameById, replaceIdsWithNames } from '../gameLoop/nameSanitize.js';
 import { GEMINI_API_KEY } from '../llm/secrets.js';
 import {
   applyTrustDelta,
@@ -98,6 +99,8 @@ export const submitInterrogation = onCall<
       ...(presentedContradictions.length > 0 ? { presentedContradictions } : {}),
       pastUtterances,
     });
+    // 回答本文に内部ID (char_N) が漏れていたら名前へ置換する (保険)。
+    output.utterance = replaceIdsWithNames(output.utterance, buildNameById(caseTruth.characters));
 
     // ---- 5. 信頼度更新 ----
     const trustAction = pickTrustAction({
