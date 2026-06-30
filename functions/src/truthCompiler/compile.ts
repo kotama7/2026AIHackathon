@@ -18,7 +18,12 @@ import { generateEvidence } from './generator/evidence.js';
 import { generateTestimonies } from './generator/testimonies.js';
 import { generateTimeline } from './generator/timeline.js';
 import { repair } from './repairer.js';
-import { deriveKnownFacts, derivePlannedLies, wireEvidenceToTimeline } from './stitch.js';
+import {
+  deriveKnownFacts,
+  derivePlannedLies,
+  sanitizeAttackWitnesses,
+  wireEvidenceToTimeline,
+} from './stitch.js';
 import type { CaseDraft, GeneratorOptions, SeedConfig, StageMetrics } from './types.js';
 import { validateAll } from './validator/validateAll.js';
 
@@ -63,7 +68,10 @@ export async function compileCaseTruth(
   opts: CompileOptions = {}
 ): Promise<CompileResult> {
   const maxRepairs = opts.maxRepairs ?? 3;
-  const maxRegens = opts.maxRegens ?? 2;
+  // 既定 1 (初回 + 1 = 計 2 サイクル)。全再生成は高コストで、3 サイクル分回すと
+  // ローカル/混雑時の LLM 遅延で 900s 関数タイムアウト (deadline-exceeded) に達する。
+  // 2 サイクルで収束しなければ truth_compiler_failure を早期に返し UI の seed fallback へ。
+  const maxRegens = opts.maxRegens ?? 1;
   const startedAt = Date.now();
 
   const stages: StageMetrics[] = [];
@@ -174,7 +182,14 @@ async function generateAssembled(
   const skeleton = await generateCaseSkeleton(cycleSeed, genOpts);
   let characters = await generateCharacters(skeleton, genOpts);
 
-  const rawTimeline = await generateTimeline(skeleton, characters, genOpts);
+  const generatedTimeline = await generateTimeline(skeleton, characters, genOpts);
+  // 襲撃の目撃者から人狼以外を除去 (motivation Check 3 を常に満たす)。
+  // deriveKnownFacts より前に行い、村人の knownFacts/知識範囲の整合を保つ。
+  const rawTimeline = sanitizeAttackWitnesses(
+    generatedTimeline,
+    skeleton.werewolfId,
+    skeleton.attackLocation
+  );
   // 知識範囲 (knownFacts) をタイムラインから確定
   characters = deriveKnownFacts(characters, rawTimeline);
 

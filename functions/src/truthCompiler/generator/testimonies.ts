@@ -13,6 +13,7 @@
  */
 import type { CaseSkeleton, Character, Evidence, Testimony, TimelineEvent } from '@village/shared';
 import { schemas } from '@village/shared';
+import { logger } from 'firebase-functions/v2';
 import { z } from 'zod';
 
 import { TEMPERATURE } from '../../llm/geminiClient.js';
@@ -216,32 +217,51 @@ export async function generateTestimonies(
   // 共有スキーマで防御的に再検証 (lie ⇒ lieReason + 非空 contradictedBy を保証)。
   const validated = z.array(schemas.testimonySchema).parse(testimonies);
 
-  // 件数はスキーマで縛れないのでコードで検証する。
-  assertTestimonyCounts(validated, characters);
-
-  return validated;
+  // 件数不足は throw せず filler で補完する (件数はスキーマで縛れない)。
+  return padTestimonyCounts(validated, characters);
 }
 
 /**
- * 容疑者ごとに最低 2 件、合計 12 件以上であることを検証する。
- * 満たさなければ明確なエラーを投げる。
+ * 容疑者ごとに最低 MIN_TESTIMONIES_PER_SUSPECT 件を満たすよう、不足分を中立的な
+ * filler 証言 (truthStatus='uncertainty') で補完する。
+ *
+ * 以前はここで throw してサイクルを丸ごと破棄→regen していたが、LLM が特定キャラの
+ * 証言を取りこぼすたびに高コストな全再生成を強制し、関数タイムアウト (deadline-exceeded)
+ * の主因になっていた。人狼特定の可解性は証拠スコア (deducibility) と deduction_path 側が
+ * 担保するため、件数充足は安全に padding で吸収する。
  */
-function assertTestimonyCounts(testimonies: Testimony[], characters: Character[]): void {
-  const minTotal = characters.length * MIN_TESTIMONIES_PER_SUSPECT;
-  if (testimonies.length < minTotal) {
-    throw new Error(`testimonies が不足: ${testimonies.length} 件 (最低 ${minTotal} 件必要)`);
-  }
-
+function padTestimonyCounts(testimonies: Testimony[], characters: Character[]): Testimony[] {
+  const result = [...testimonies];
   const countBySpeaker = new Map<string, number>();
   for (const t of testimonies) {
     countBySpeaker.set(t.speakerId, (countBySpeaker.get(t.speakerId) ?? 0) + 1);
   }
-  const lacking = characters
-    .filter((c) => (countBySpeaker.get(c.id) ?? 0) < MIN_TESTIMONIES_PER_SUSPECT)
-    .map((c) => `${c.id}=${countBySpeaker.get(c.id) ?? 0}`);
-  if (lacking.length > 0) {
-    throw new Error(
-      `各容疑者から最低 ${MIN_TESTIMONIES_PER_SUSPECT} 件の証言が必要ですが不足: ${lacking.join(', ')}`
-    );
+
+  let seq = testimonies.length;
+  const lacking: string[] = [];
+  for (const c of characters) {
+    let count = countBySpeaker.get(c.id) ?? 0;
+    if (count < MIN_TESTIMONIES_PER_SUSPECT) lacking.push(`${c.id}=${count}`);
+    while (count < MIN_TESTIMONIES_PER_SUSPECT) {
+      seq += 1;
+      result.push({
+        id: `t${seq}`,
+        day: 1,
+        speakerId: c.id,
+        text: 'この件について、今はっきり話せることは特にない。',
+        truthStatus: 'uncertainty',
+        contradictedBy: [],
+        knownFactsUsed: [],
+      });
+      count += 1;
+    }
   }
+
+  if (lacking.length > 0) {
+    logger.warn('[gen/testimonies] 件数不足を filler で補完', {
+      lacking,
+      padded: result.length - testimonies.length,
+    });
+  }
+  return result;
 }

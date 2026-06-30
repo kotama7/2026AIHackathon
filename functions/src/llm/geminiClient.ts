@@ -1,4 +1,8 @@
-import { type GenerativeModel, GoogleGenerativeAI } from '@google/generative-ai';
+import {
+  type GenerationConfig,
+  type GenerativeModel,
+  GoogleGenerativeAI,
+} from '@google/generative-ai';
 import { logger } from 'firebase-functions/v2';
 
 import { GeminiConfigError, GeminiRetryExhaustedError, GeminiTimeoutError } from './errors.js';
@@ -24,9 +28,16 @@ export const TEMPERATURE = {
  * Truth Compiler の多数の連続呼び出しでもレート上限に当たりにくい。
  * (1.5-flash は廃止、2.0-flash は無料枠0、2.5-flash は 5 RPM で枯渇しやすい)
  */
-const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
+// flash-lite は無料枠 RPM が高い反面、現状「503 high demand」(容量逼迫) が頻発し
+// リトライ遅延で関数がタイムアウトしていた。flash は 503 が出ず (実測)、各呼び出しが
+// 10〜38s かかるため自然に低レートになり 429 にも当たりにくい。thinkingBudget=0 と
+// 併用して採用する。
+const DEFAULT_MODEL = 'gemini-2.5-flash';
 
-const DEFAULT_TIMEOUT_MS = 30_000;
+// 混雑時 (503 high demand) の Gemini は単発応答が 30s を超えることがあり、タイムアウトは
+// リトライされない設計のため 30s だと repair/重い生成が誤って失敗→regen を誘発していた。
+// 余裕を持たせて spurious timeout を減らす。
+const DEFAULT_TIMEOUT_MS = 60_000;
 // 無料枠は per-minute レート制限 (例: 5 RPM)。429 の retryDelay (~16s) を待ち切れるよう
 // リトライ回数を多めに。指数バックオフではなくサーバ指定の retryDelay を優先する。
 const DEFAULT_MAX_RETRIES = 6;
@@ -199,11 +210,17 @@ export async function callGemini(opts: CallGeminiOptions): Promise<CallGeminiRes
     ? null
     : getClient().getGenerativeModel({
         model: modelName,
+        // gemini-2.5-flash は既定で「思考(thinking)」が有効で、内部推論が出力トークン枠を
+        // 消費する。そのため小さめの maxOutputTokens では JSON 出力が途中で切れ
+        // ("Unterminated string")、構造化生成が失敗する。thinkingBudget=0 で思考を無効化し
+        // 全枠を JSON 出力に充てる。SDK 0.21 の型に thinkingConfig は無いが、SDK は
+        // generationConfig を JSON.stringify でそのまま送るため API には届く (実測確認済み)。
         generationConfig: {
           temperature,
           maxOutputTokens,
           ...(jsonMode ? { responseMimeType: 'application/json' } : {}),
-        },
+          ...(/gemini-2\.5/.test(modelName) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+        } as GenerationConfig,
       });
   // ローカル LLM はネットワーク/推論が遅いことがあるので timeout を延長 (明示指定が無い場合)
   const effectiveTimeout =

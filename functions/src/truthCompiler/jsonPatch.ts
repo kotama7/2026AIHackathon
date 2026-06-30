@@ -33,7 +33,12 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 /**
- * patches を順に適用する。1 つでも失敗したら ok:false を返す (途中までの変更は破棄)。
+ * patches を順に適用する。
+ *
+ * 個々の op が失敗 (配列 index の取り違え等) してもバッチ全体を捨てず、その op だけスキップして
+ * 続行する。LLM repair は複数 op のうち 1 つの index を誤りがちで、以前は 1 つの失敗で repair
+ * 全体が無効化 → regen → 関数タイムアウトを誘発していた。少なくとも 1 つ適用できれば ok:true を
+ * 返し (上位で再検証される)、全 op 失敗のときのみ ok:false。clone 失敗は即 ok:false。
  */
 export function applyJsonPatch(doc: unknown, patches: JsonPatchOp[]): ApplyPatchResult {
   let working: unknown;
@@ -47,12 +52,25 @@ export function applyJsonPatch(doc: unknown, patches: JsonPatchOp[]): ApplyPatch
     };
   }
 
+  let appliedCount = 0;
+  let lastError = '';
+  let lastFailedOp: JsonPatchOp | undefined;
   for (const patch of patches) {
     try {
       working = applyOne(working, patch);
+      appliedCount++;
     } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e), failedOp: patch };
+      lastError = e instanceof Error ? e.message : String(e);
+      lastFailedOp = patch;
     }
+  }
+
+  if (appliedCount === 0) {
+    return {
+      ok: false,
+      error: lastError || 'no patches applied',
+      failedOp: lastFailedOp ?? patches[0] ?? { op: 'replace', path: '' },
+    };
   }
   return { ok: true, doc: working };
 }

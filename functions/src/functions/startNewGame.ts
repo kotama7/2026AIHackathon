@@ -14,6 +14,8 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { internalDb, nowTimestamp, userDb } from '../db/admin.js';
+import { generateIncidentBriefing } from '../gameLoop/briefing.js';
+import { generateDailyDiscussion } from '../gameLoop/discussion.js';
 import { GEMINI_API_KEY } from '../llm/secrets.js';
 import { loadSeedCase } from '../seed/loadSeedCase.js';
 import { compileCaseTruth, TruthCompilerError } from '../truthCompiler/index.js';
@@ -116,9 +118,12 @@ async function persistAndRespond(
     .filter((e) => e.day === 1)
     .map(toEvidencePublic)
     .slice(0, 3);
-  const initialLogs = buildPlaceholderLogs(gameId, publicChars);
-  const meta = buildRealMeta(uid, gameId, publicChars, isSeedGame);
 
+  // 事件導入ブリーフィング (ネタバレなし)。実ゲームは LLM 生成、seed/失敗時は静的文。
+  const incidentBriefing = await buildIncidentBriefing(caseTruth, isSeedGame);
+  const meta = buildRealMeta(uid, gameId, publicChars, isSeedGame, incidentBriefing);
+
+  // ログ以外のコアデータを先に保存 (meta が無いと議論生成の publicLogs 書き込みが宙に浮くため)。
   await Promise.all([
     // --- internal/ (Functions 専用) ---
     internalDb.caseTruth.set(gameId, caseTruth),
@@ -128,8 +133,34 @@ async function persistAndRespond(
     userDb.meta.set(uid, gameId, meta),
     ...publicChars.map((c) => userDb.characters.set(uid, gameId, c.id, c)),
     userDb.evidence.addMany(uid, gameId, day1Evidence),
-    ...initialLogs.map((l) => userDb.publicLogs.add(uid, gameId, l)),
   ]);
+
+  // Day1 の初期議論。実ゲームは事件に基づく AI 議論を生成 (generateDailyDiscussion が
+  // publicLogs を逐次書き込む)。seed や生成失敗時は汎用プレースホルダにフォールバック。
+  // これが無いと Day1 は中身が無く、最初の実議論が Day2 (夜処理生成) になり
+  // 「いきなり Day2」「事件が分からない」体験になっていた。
+  let initialLogs: DialogueLog[] = [];
+  if (!isSeedGame) {
+    try {
+      initialLogs = await generateDailyDiscussion({
+        uid,
+        gameId,
+        day: 1,
+        characters: caseTruth.characters,
+        priorLogs: [],
+        turns: 2,
+      });
+    } catch (err) {
+      logger.error('[startNewGame] Day1 議論生成に失敗、プレースホルダにフォールバック', {
+        gameId,
+        err: String(err),
+      });
+    }
+  }
+  if (initialLogs.length === 0) {
+    initialLogs = buildPlaceholderLogs(gameId, publicChars);
+    await Promise.all(initialLogs.map((l) => userDb.publicLogs.add(uid, gameId, l)));
+  }
 
   return {
     gameId,
@@ -170,11 +201,33 @@ function toEvidencePublic(e: EvidencePublic): EvidencePublic {
   };
 }
 
+/**
+ * 事件導入ブリーフィングを用意する。実ゲームは LLM 生成し、seed や失敗時は静的文に
+ * フォールバックして必ず非空の導入を返す (UI が常にブリーフィングを表示できる)。
+ */
+async function buildIncidentBriefing(caseTruth: CaseTruth, isSeedGame: boolean): Promise<string> {
+  const fallback =
+    '昨夜、村で痛ましい事件が起きた。住民の一人が何者かに襲われ、命を落としたのだ。' +
+    'この村には人狼が紛れ込んでいる。容疑者は村に暮らす者たち。' +
+    'あなたは外部監査官として、3日以内に真犯人を見つけ出さねばならない。';
+  if (isSeedGame) return fallback;
+  try {
+    return await generateIncidentBriefing(caseTruth);
+  } catch (err) {
+    logger.error('[startNewGame] ブリーフィング生成に失敗、静的文にフォールバック', {
+      gameId: caseTruth.caseId,
+      err: String(err),
+    });
+    return fallback;
+  }
+}
+
 function buildRealMeta(
   uid: UserId,
   gameId: GameId,
   chars: CharacterPublic[],
-  isSeedGame: boolean
+  isSeedGame: boolean,
+  incidentBriefing: string
 ): GameMeta {
   const now = nowTimestamp();
   return {
@@ -187,6 +240,7 @@ function buildRealMeta(
     villageTrust: 50,
     status: 'in_progress',
     isSeedGame,
+    incidentBriefing,
     createdAt: now,
     updatedAt: now,
   };

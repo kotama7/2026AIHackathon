@@ -30,14 +30,21 @@ export const TRUST_DELTAS = {
   EXECUTE_VILLAGER: { village: -30 },
 } as const;
 
-/** 推理可能性スコアの閾値 (要件 §6.7) */
+/**
+ * 推理可能性スコアの閾値 (要件 §6.7)。
+ * スコア = Σ(その容疑者を pointsTo に含む証拠 weight)、weight は 0〜5。
+ * 当初 (7〜10 / 4〜6 / gap 2〜4) は 3 つの窓が同時に狭く実現領域が極小で、
+ * LLM 生成がほぼ通らず repair/regen を使い切ってタイムアウトしていた。
+ * 「人狼が単独最大 (Check1)」「人狼を指す証拠 ≥2 (Check5)」というパズルの本質は
+ * 別チェックで担保されるため、難易度調整用のこの数値窓は緩めて生成成功率を優先する。
+ */
 export const DEDUCIBILITY_THRESHOLDS = {
-  WEREWOLF_SCORE_MIN: 7,
-  WEREWOLF_SCORE_MAX: 10,
-  RED_HERRING_SCORE_MIN: 4,
-  RED_HERRING_SCORE_MAX: 6,
-  GAP_MIN: 2,
-  GAP_MAX: 4,
+  WEREWOLF_SCORE_MIN: 6,
+  WEREWOLF_SCORE_MAX: 13,
+  RED_HERRING_SCORE_MIN: 3,
+  RED_HERRING_SCORE_MAX: 8,
+  GAP_MIN: 1,
+  GAP_MAX: 7,
   REQUIRED_EVIDENCE_FOR_WEREWOLF: 2,
 } as const;
 

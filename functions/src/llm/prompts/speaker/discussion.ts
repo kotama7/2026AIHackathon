@@ -10,19 +10,28 @@ export type BuildDiscussionPromptArgs = {
   priorLogs: DialogueLog[];
   /** 議論の目的 (例: "事件について自分の見解を述べる") */
   goal: string;
+  /** 全登場人物の id→名前 対応 (本文で名前を使わせ、char_N の漏れを防ぐため) */
+  roster?: Array<{ id: string; name: string }>;
 };
 
 export function buildDiscussionPrompt({
   speaker,
   priorLogs,
   goal,
+  roster = [],
 }: BuildDiscussionPromptArgs): string {
+  const nameById = new Map(roster.map((r) => [r.id, r.name]));
+  const displayName = (id: string): string => nameById.get(id) ?? id;
+
+  const rosterText =
+    roster.length === 0 ? '  (不明)' : roster.map((r) => `  - ${r.name}`).join('\n');
+
   const priorLogsText =
     priorLogs.length === 0
       ? '(まだ議論は始まったばかり)'
       : priorLogs
           .slice(-6)
-          .map((l) => `  - [${l.speakerId}] ${l.text}`)
+          .map((l) => `  - ${displayName(l.speakerId)}「${l.text}」`)
           .join('\n');
 
   const knownFactsText =
@@ -32,7 +41,7 @@ export function buildDiscussionPrompt({
 
   const suspicionsText = Object.entries(speaker.suspicions)
     .filter(([, score]) => score >= 30)
-    .map(([id, score]) => `  - ${id}: ${score}`)
+    .map(([id, score]) => `  - ${displayName(id)}: ${score}`)
     .join('\n');
 
   const liePolicyText = [
@@ -60,6 +69,9 @@ export function buildDiscussionPrompt({
 - 嘘をつく傾向 (0-100): ${speaker.lieTendency}
 - 協力度合い (0-100): ${speaker.cooperationLevel}
 
+# 村の登場人物 (発言で他者に言及するときは必ずこの名前を使う)
+${rosterText}
+
 # あなたが知っている事実 (これ以外は知らない)
 ${knownFactsText}
 
@@ -78,6 +90,7 @@ ${werewolfNote}
 
 # 出力要件
 - 1〜3 文の自然な発言を作る (合計 80 文字程度を目安、長すぎないこと)
+- 発言本文で他の登場人物に言及するときは必ず上記の「名前」で呼ぶ。char_1 のような内部IDを発言テキストに絶対に書かない
 - 知らない事実は絶対に話さない (上の "知っている事実" のキーに含まれないトピックは触れない)
 - 嘘ポリシーに合致する範囲で発言してよい (合致しないなら truth で発言)
 - JSON で返す。以下のスキーマに従う:

@@ -63,7 +63,10 @@ export async function repair(
       prompt: buildRepairPrompt({ truth, issues: errorIssues }),
       schema: patchOutputSchema,
       temperature: TEMPERATURE.VALIDATOR,
-      maxOutputTokens: 2048,
+      // patch の value に secret 等の長い日本語文字列が入ると 2048 では出力が途中で切れ、
+      // "Unterminated string" でパース失敗→修復不能→全体 regen ループ→関数タイムアウトに陥る。
+      // 余裕を持たせて切断を防ぐ。
+      maxOutputTokens: 8192,
       maxAttempts: opts.maxAttempts ?? 2,
       ...(opts.model ? { model: opts.model } : {}),
       traceLabel: 'repair',

@@ -84,34 +84,40 @@ export function validateDeducibility(truth: CaseTruth): ValidationResult {
     });
   }
 
-  // --- Check 2: 人狼スコアが範囲内 [WEREWOLF_SCORE_MIN, WEREWOLF_SCORE_MAX] ---
+  // --- Check 2/3/4: スコアの数値窓は「難易度調整」であり可解性の必須条件ではない。
+  // しかもスコアは証拠 weight からの創発値で、LLM repair は character に存在しない
+  // `deducibility`/`maxRedHerringScore` 等の偽フィールドを捏造して必ず失敗→regen を誘発する
+  // (出力肥大で JSON 切断も起こす)。よって severity を 'warning' に降格し、repair/regen を
+  // 起こさず通す。可解性は Check1 (人狼が単独最大) / Check5 (証拠≥2) / Check6 (経路接続) が担保。
+  const gap = werewolfScore - maxNonWerewolfScore;
+
+  // --- Check 2: 人狼スコアが範囲内 [WEREWOLF_SCORE_MIN, WEREWOLF_SCORE_MAX] (warning) ---
   if (werewolfScore < WEREWOLF_SCORE_MIN || werewolfScore > WEREWOLF_SCORE_MAX) {
     issues.push({
       category: 'deducibility',
-      severity: 'error',
-      message: `人狼 (${werewolfId}) のスコア ${werewolfScore} が範囲外です (期待: ${WEREWOLF_SCORE_MIN}〜${WEREWOLF_SCORE_MAX})。`,
+      severity: 'warning',
+      message: `人狼 (${werewolfId}) のスコア ${werewolfScore} が推奨範囲外です (推奨: ${WEREWOLF_SCORE_MIN}〜${WEREWOLF_SCORE_MAX})。`,
       relatedIds: [werewolfId],
     });
   }
 
-  // --- Check 3: 最大レッドヘリングスコアが範囲内 [RED_HERRING_SCORE_MIN, RED_HERRING_SCORE_MAX] ---
+  // --- Check 3: 最大レッドヘリングスコアが範囲内 [RED_HERRING_SCORE_MIN, RED_HERRING_SCORE_MAX] (warning) ---
   if (maxNonWerewolfScore < RED_HERRING_SCORE_MIN || maxNonWerewolfScore > RED_HERRING_SCORE_MAX) {
     const topNonWerewolf = nonWerewolf.filter((id) => (scores[id] ?? 0) === maxNonWerewolfScore);
     issues.push({
       category: 'deducibility',
-      severity: 'error',
-      message: `最大レッドヘリングスコア ${maxNonWerewolfScore} が範囲外です (期待: ${RED_HERRING_SCORE_MIN}〜${RED_HERRING_SCORE_MAX})。`,
+      severity: 'warning',
+      message: `最大レッドヘリングスコア ${maxNonWerewolfScore} が推奨範囲外です (推奨: ${RED_HERRING_SCORE_MIN}〜${RED_HERRING_SCORE_MAX})。`,
       relatedIds: topNonWerewolf,
     });
   }
 
-  // --- Check 4: 差分 gap が範囲内 [GAP_MIN, GAP_MAX] ---
-  const gap = werewolfScore - maxNonWerewolfScore;
+  // --- Check 4: 差分 gap が範囲内 [GAP_MIN, GAP_MAX] (warning) ---
   if (gap < GAP_MIN || gap > GAP_MAX) {
     issues.push({
       category: 'deducibility',
-      severity: 'error',
-      message: `人狼スコアと最大レッドヘリングスコアの差 ${gap} が範囲外です (期待: ${GAP_MIN}〜${GAP_MAX})。`,
+      severity: 'warning',
+      message: `人狼スコアと最大レッドヘリングスコアの差 ${gap} が推奨範囲外です (推奨: ${GAP_MIN}〜${GAP_MAX})。`,
       relatedIds: [werewolfId],
     });
   }

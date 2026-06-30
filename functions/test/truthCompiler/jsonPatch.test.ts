@@ -39,9 +39,18 @@ describe('applyJsonPatch', () => {
     expect(r2.ok).toBe(false);
   });
 
-  it('複数 patch を順に適用、1 つ失敗で全体 ok:false', () => {
+  it('複数 patch: 一部失敗しても成功 op は適用し ok:true (寛容適用)', () => {
     const r = applyJsonPatch({ a: 1, b: 2 }, [
       { op: 'replace', path: '/a', value: 10 },
+      { op: 'replace', path: '/missing/x', value: 1 }, // これは失敗するがスキップ
+    ]);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.doc).toEqual({ a: 10, b: 2 });
+  });
+
+  it('全 op 失敗のときのみ ok:false', () => {
+    const r = applyJsonPatch({ a: 1 }, [
+      { op: 'remove', path: '/nope' },
       { op: 'replace', path: '/missing/x', value: 1 },
     ]);
     expect(r.ok).toBe(false);

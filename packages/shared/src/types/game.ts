@@ -38,6 +38,11 @@ export type GameMeta = {
   status: GameStatus;
   /** デモ用シードゲームかどうか */
   isSeedGame: boolean;
+  /**
+   * 事件導入ブリーフィング (ネタバレなし)。Day1 開始時にプレイヤーへ事件の概要
+   * (いつ・どこで何が起きたか / 容疑者) を提示する。実ゲームは startNewGame で生成。
+   */
+  incidentBriefing?: string;
   createdAt: FirebaseTimestamp;
   updatedAt: FirebaseTimestamp;
 };
