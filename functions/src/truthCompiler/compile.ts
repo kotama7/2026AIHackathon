@@ -22,6 +22,7 @@ import {
   deriveKnownFacts,
   derivePlannedLies,
   sanitizeAttackWitnesses,
+  sanitizeCaseTruthProse,
   wireEvidenceToTimeline,
 } from './stitch.js';
 import type { CaseDraft, GeneratorOptions, SeedConfig, StageMetrics } from './types.js';
@@ -134,6 +135,8 @@ export async function compileCaseTruth(
     }
 
     if (validation.passed) {
+      // prose に漏れた内部ID (char_N/victim_N) を名前へ置換 (構造化IDは不変なので再検証不要)。
+      truth = sanitizeCaseTruthProse(truth);
       truth.validationResult = validation;
       const metrics: CompileMetrics = {
         stages,
