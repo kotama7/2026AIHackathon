@@ -112,6 +112,14 @@ export async function processVerdict(args: ProcessVerdictArgs): Promise<ProcessV
       currentPhase: 'result',
       updatedAt: nowTimestamp(),
     });
+  } else {
+    // 継続時はサーバ phase を night へ確定する。以前は phase を据え置き、UI ヘッダーの
+    // blind な advancePhase(trial→night) に依存していたため、ゲーム終了を確定する判定処理と
+    // 競合し (race)、夜フェーズで submitNightAction が phase 不一致 400 を繰り返していた。
+    await userDb.meta.update(uid, gameId, {
+      currentPhase: 'night',
+      updatedAt: nowTimestamp(),
+    });
   }
 
   logger.info('[verdict] processed', {

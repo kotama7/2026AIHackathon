@@ -76,6 +76,33 @@ export default function NightPage({ params }: { params: Promise<{ gameId: string
     router.push(result?.gameOver ? `/play/${gameId}/result` : `/play/${gameId}/discussion`);
   }
 
+  // ガード: まだ確定していない (pick/confirm) のに夜フェーズでない場合、確定させない。
+  // ゲーム終了後や別フェーズで夜ページに来たときの submitNightAction 400 ループを防ぐ。
+  if (meta && meta.currentPhase !== 'night' && (stage === 'pick' || stage === 'confirm')) {
+    const gameOver = meta.status !== 'in_progress';
+    return (
+      <div className="space-y-section">
+        <header className="space-y-card">
+          <h1 className="font-serif text-3xl text-brand-gold">夜フェーズ</h1>
+        </header>
+        <div className="rounded-card border border-brand-border bg-brand-surface p-page text-sm text-brand-muted">
+          <p>
+            {gameOver
+              ? 'このゲームは既に終了しています。'
+              : '今は夜フェーズではありません。裁判を終えると夜フェーズに進めます。'}
+          </p>
+          <div className="mt-card">
+            <Button
+              onClick={() => router.push(gameOver ? `/play/${gameId}/result` : `/play/${gameId}`)}
+            >
+              {gameOver ? '結果を見る →' : '概要に戻る'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-section">
       <header className="space-y-card">

@@ -43,10 +43,23 @@ maybe('Truth Compiler e2e (real Gemini)', () => {
       for (let i = 0; i < RUNS; i++) {
         const startedAt = Date.now();
         try {
-          const { metrics } = await compileCaseTruth(
+          const { caseTruth, metrics } = await compileCaseTruth(
             { caseId: `e2e_${i}`, diversitySeed: `e2e-run-${i}` },
             { useLlm: false, ...(process.env.E2E_MODEL ? { model: process.env.E2E_MODEL } : {}) }
           );
+          if (process.env.E2E_DUMP_PROSE) {
+            const prose = [
+              ...caseTruth.evidence.flatMap((e) => [e.name, e.description, e.trueInterpretation]),
+              ...caseTruth.testimonies.map((t) => t.text),
+              ...caseTruth.deductionPath.steps.map((s) => s.reasoning),
+              caseTruth.summary.solutionLogic,
+            ].join('\n');
+            const leaks = prose.match(/\b(?:char|victim)_\d+\b/g) ?? [];
+
+            console.log(`[PROSE_LEAK_CHECK run ${i}] leaks=${leaks.length}`, leaks.slice(0, 10));
+
+            console.log(`[EV_NAMES run ${i}]`, caseTruth.evidence.map((e) => e.name).slice(0, 4));
+          }
           const tokens = metrics.stages.reduce(
             (acc, s) => ({
               input: acc.input + (s.inputTokens ?? 0),
