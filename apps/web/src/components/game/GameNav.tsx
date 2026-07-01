@@ -12,14 +12,19 @@ import { useSyncFirestoreToStore } from '@/hooks/useSyncFirestoreToStore';
 import { callAdvancePhase } from '@/lib/firebase/functions';
 import { useGamePhaseInfo, useRemainingPoints } from '@/stores/gameStore';
 
-/** 現フェーズで押せる「次へ進む」導線。slug は前進後に開くタブ。 */
+/**
+ * 現フェーズで押せる「次へ進む」導線。slug は前進後に開くタブ。
+ * trial / night は専用アクション (裁判の判決 submitTrialDecision / 夜の監視 submitNightAction) が
+ * サーバ側の phase 遷移を担うため、ヘッダーの blind な advancePhase は置かない
+ * (置くと判定処理と競合し phase 不整合を起こす)。
+ */
 const NEXT_BY_PHASE: Record<GamePhase, { label: string; slug: string } | null> = {
   morning: { label: '議論を始める', slug: 'discussion' },
   discussion: { label: '調査（尋問）へ', slug: 'interrogate' },
   investigation: { label: '整理へ', slug: 'pins' },
   organize: { label: '裁判へ', slug: 'trial' },
-  trial: { label: '夜へ', slug: 'night' },
-  night: { label: '次の日へ', slug: '' },
+  trial: null,
+  night: null,
   result: null,
 };
 
