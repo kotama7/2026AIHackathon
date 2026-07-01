@@ -144,7 +144,7 @@ export default function DiscussionPage({ params }: { params: Promise<{ gameId: s
             })}
           </ol>
 
-          {isDiscussing && <WaitingForNextLog />}
+          {isDiscussing && <DiscussionReadyPrompt />}
           {(isDiscussionEnded || ownerOfLatestPhase) && <DiscussionEndedMarker />}
         </>
       )}
@@ -158,21 +158,24 @@ export default function DiscussionPage({ params }: { params: Promise<{ gameId: s
   );
 }
 
-function WaitingForNextLog() {
+/**
+ * 議論ログは startNewGame / 夜処理で一括生成され、プレイヤーが見る時点で出そろっている
+ * (逐次ストリーミングではない)。よって「次の発言を待つ」無限スピナーは出さず、
+ * この日の議論が完了していることと次フェーズへの進み方を明示する。
+ */
+function DiscussionReadyPrompt() {
   return (
-    <div className="flex items-center justify-center gap-2 py-card text-sm text-brand-muted">
-      <span className="inline-flex gap-1">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-gold" />
-        <span
-          className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-gold"
-          style={{ animationDelay: '0.15s' }}
-        />
-        <span
-          className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-gold"
-          style={{ animationDelay: '0.3s' }}
-        />
-      </span>
-      次の発言を待っています…
+    <div className="flex flex-col items-center gap-2 rounded-card border border-brand-border bg-brand-surface py-card text-center text-sm text-brand-muted">
+      <div className="flex items-center gap-2">
+        <span className="h-px w-8 bg-brand-border" />
+        <Badge tone="neutral">この日の議論は以上です</Badge>
+        <span className="h-px w-8 bg-brand-border" />
+      </div>
+      <p>
+        気になる発言をピン留めしたら、上部メニューの
+        <span className="mx-1 font-semibold text-brand-gold">「調査（尋問）へ ▶」</span>
+        から次のフェーズに進んでください。
+      </p>
     </div>
   );
 }

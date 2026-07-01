@@ -3,7 +3,14 @@
  * Generator 間のデータ依存 (知識範囲, 証拠→タイムライン逆参照, 計画された嘘) を
  * LLM ではなくコードで埋める。
  */
-import type { Character, Evidence, PlannedLie, Testimony, TimelineEvent } from '@village/shared';
+import type {
+  CaseTruth,
+  Character,
+  Evidence,
+  PlannedLie,
+  Testimony,
+  TimelineEvent,
+} from '@village/shared';
 
 /**
  * 襲撃イベント (人狼が襲撃場所にいるイベント) の目撃者から人狼以外を機械的に除去する。
@@ -30,6 +37,61 @@ export function sanitizeAttackWitnesses(
       observedBy: e.observedBy.filter((id) => id === werewolfId),
     };
   });
+}
+
+/**
+ * CaseTruth のプレイヤーに見える prose (自由テキスト) に内部ID (char_N / victim_N) が
+ * 漏れている場合、登場人物名へ置換する。
+ *
+ * 証拠説明・証言・推理理由・秘密などは LLM 生成で、他者を "char_1" と書いてしまうことがある。
+ * これらはプレイヤーに直接表示される (証拠一覧・尋問・真相解説) ため、決定的に名前化する。
+ * 構造化ID (pointsTo / relatedCharacters / speakerId / werewolfId / excludedSuspects 等) は
+ * ゲームロジックが使うので変更しない (置換対象はテキストフィールドのみ)。
+ * 被害者は名前を持たないため総称「被害者」に置換する。
+ */
+export function sanitizeCaseTruthProse(truth: CaseTruth): CaseTruth {
+  const nameById = new Map(truth.characters.map((c) => [c.id, c.name]));
+  nameById.set(truth.summary.victimId, '被害者');
+  const fix = (s: string): string =>
+    s.replace(/\b(?:char|victim)_\d+\b/g, (id) => nameById.get(id) ?? id);
+
+  return {
+    ...truth,
+    summary: { ...truth.summary, solutionLogic: fix(truth.summary.solutionLogic) },
+    characters: truth.characters.map((c) => ({
+      ...c,
+      publicPersonality: fix(c.publicPersonality),
+      speakingStyle: fix(c.speakingStyle),
+      secret: fix(c.secret),
+      privateGoal: fix(c.privateGoal),
+      fear: fix(c.fear),
+      bias: fix(c.bias),
+    })),
+    timeline: truth.timeline.map((e) => ({ ...e, action: fix(e.action) })),
+    evidence: truth.evidence.map((e) => ({
+      ...e,
+      name: fix(e.name),
+      description: fix(e.description),
+      trueInterpretation: fix(e.trueInterpretation),
+    })),
+    testimonies: truth.testimonies.map((t) => ({
+      ...t,
+      text: fix(t.text),
+      ...(t.lieReason != null ? { lieReason: fix(t.lieReason) } : {}),
+    })),
+    deductionPath: {
+      ...truth.deductionPath,
+      steps: truth.deductionPath.steps.map((s) => ({ ...s, reasoning: fix(s.reasoning) })),
+    },
+    redHerrings: truth.redHerrings.map((r) => ({ ...r, reason: fix(r.reason) })),
+    plannedLies: truth.plannedLies.map((p) => ({
+      ...p,
+      content: fix(p.content),
+      reason: fix(p.reason),
+      hiddenTruth: fix(p.hiddenTruth),
+      reactionWhenExposed: fix(p.reactionWhenExposed),
+    })),
+  };
 }
 
 /**
